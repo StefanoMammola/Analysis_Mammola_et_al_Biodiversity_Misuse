@@ -1,0 +1,243 @@
+# BATS & COVID
+# Nanni et al.
+
+# Loading R package -------------------------------------------------------
+library("grid")
+library("ggplot2")       # for plotting
+library("gridExtra")     # for plates
+library("overlapping")   # for overlap
+library("tidyverse")     # for tidy operations
+library("xlsx")
+
+# Setting working directory -----------------------------------------------
+
+setwd("/Users/stefanomammola/Desktop/PAPERS IN CORSO/Nanni et al. Bats & COVID/mappa")
+#x Vero
+setwd("/Users/Asus/Desktop/Pippi e news/File Ste")
+
+
+#-----------------------        FIGURE 1   -------------------------------
+# Loading the datasets ---------------------------------------------------
+library(rgeos)
+library(rworldmap)
+
+setwd("C:/Users/Asus/Desktop/Pippi e news")
+db_map= read.xlsx("Bats_news_dataset_R.xlsx", sheetName = "map")
+str(db_map)
+
+
+# get world map
+wmap <- getMap(resolution="high")
+world <- map_data("world")
+
+# get centroids
+centroids <- gCentroid(wmap, byid=TRUE)
+
+# get a data.frame with centroids
+df <- as.data.frame(centroids)
+head(df)
+
+#plot map
+(map1 <- ggplot() +
+    geom_map(map = world, data = world,
+             aes(long, lat, map_id = region), 
+             color = "gray50", fill = "gray95", size = 0.3) +
+    # geom_point(data = db_map, 
+    #            aes(x = lon, y = lat),
+    #            alpha = 0.8, size = 1.5,
+    #            shape = 16)+
+    ylim(-50,80)+ theme_bw()+
+    theme(
+      axis.text.x  = element_blank(), 
+      axis.text.y  = element_blank(),
+      axis.title.y = element_blank(),
+      axis.title.x = element_blank(), 
+      axis.line.x = element_blank(), 
+      axis.line.y = element_blank(),
+      panel.border = element_blank(),
+      panel.grid.major.x = element_blank(),                                          
+      panel.grid.minor.x = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      panel.grid.major.y = element_blank(), 
+      axis.ticks = element_blank(),
+      plot.margin = unit(c(1,1,1,1), 'cm'),
+      plot.title = element_text(size = 18, vjust = 1, hjust = 0),
+      legend.text = element_text(size = 12),          
+      legend.title = element_blank(),                              
+      legend.position = c(0.1, 0.2), 
+      legend.key = element_blank(),
+      legend.background = element_rect(color = "black", 
+                                       fill = "white", 
+                                       size = 2, linetype = "blank")))
+
+library("scatterpie")
+db_map$radius <- sqrt(db_map$total_news)
+col_map = c("blue","black","blueviolet")
+
+(map2 <- map1 + geom_scatterpie(aes(x=lon, y=lat, r=radius), # group=region
+                                data=db_map, cols = c("X2018","X2019","X2020"), color="grey20", alpha=.9) +
+    geom_scatterpie_legend(db_map$radius, x= -150, y= -25, n = 2,
+                           labeller = function (x) x=c(min(db_map$total_news),max(db_map$total_news)))+
+    #scale_color_manual(values=col_map)+
+    scale_fill_manual("",c("2018","2019","2020"),values=col_map)+ theme(legend.position = "top"))
+
+
+#-----------------------        FIGURE 2   -------------------------------
+# Loading the datasets ---------------------------------------------------
+
+db_cases <- read.table("db_cases.csv",sep="\t",dec=".",header=TRUE,as.is=FALSE)
+
+## Data manipulation
+
+db_cases <- db_cases %>% 
+  filter(Country != "Namibia")  %>%
+  mutate_at(vars(Date,Country),as.factor) %>% 
+  mutate_at(vars(N_art,N_cases),as.integer) 
+
+levels(db_cases$Country)[8] <- "DR of Congo" #rename the Democratic Republic of the Congo 
+
+# Organizing the database
+db_cases_2 <-  db_cases[db_cases$Country== levels(db_cases$Country)[1],]
+Art <- rep(db_cases_2$Quindicina, db_cases_2$N_art)
+Cas <- rep(db_cases_2$Quindicina, db_cases_2$N_cases)
+Type <- c(rep("Articles", length(Art)), rep("COVID-19 cases",length(Cas)) )
+db_cases_3 <- data.frame(N=c(Art,Cas),Type, Country = rep(levels(db_cases$Country)[1], length(c(Art,Cas))))
+
+for (i in 2:nlevels(db_cases$Country)){
+  
+  db_cases_2 <-  db_cases[db_cases$Country== levels(db_cases$Country)[i], ]
+  Art <- rep(db_cases_2$Quindicina, db_cases_2$N_art)
+  Cas <- rep(db_cases_2$Quindicina, db_cases_2$N_cases)
+  Type <- c(rep("Articles", length(Art)), rep("COVID-19 cases",length(Cas)) )
+  db_cases_3 <- rbind(db_cases_3 , data.frame(N=c(Art,Cas),Type, Country = rep(levels(db_cases$Country)[i], length(c(Art,Cas)))))
+  
+}
+
+# for having china first
+db_cases_3$Country <- as.factor(db_cases_3$Country)
+
+order <- c("China", levels(db_cases_3$Country)[-6])
+
+#For the text
+text_plot <- db_cases %>%
+  group_by(Country) %>%
+  summarise(N = sum(N_art), N2 = sum(N_cases))
+
+col_dens <- c("grey30","blueviolet") # "darkred" "turquoise4"
+
+#Plot
+plot <- db_cases_3 %>% 
+  mutate_at("Country", ordered, levels=order) %>% 
+  ggplot() + 
+  geom_density(aes(x = N, y=..density.., fill = Type, colour = Type),alpha=0.6,bw = 0.6)+
+  scale_fill_manual(labels=c("Bat-associated diseases news", "COVID-19 cases"),values=col_dens)+
+  scale_color_manual(labels=c("Bat-associated diseases news", "COVID-19 cases"),values=col_dens)+
+  facet_wrap(~Country)+
+  scale_x_continuous(breaks = c(1,3,5,7,9,11), labels = c("Feb", "Mar", "Apr","May","Jun","Jul"))+
+  scale_y_continuous(limits = c(0,0.5), breaks = c(0,0.1,0.2,0.3,0.4,0.5), labels=c("0.0","0.1","0.2","0.3","0.4","0.5"))
+
+final_plot <- plot + 
+  geom_text(data=text_plot, x=11.1, y=0.44, aes(label = paste("News:",N)),  colour=col_dens[1],size=3, hjust=1)+
+  geom_text(data=text_plot, x=11.1, y=0.50, aes(label = paste("Cases:",N2)),  colour=col_dens[2],size=3, hjust=1)+
+  theme_classic() +
+  labs(y="Density") +
+  theme(legend.position = "top",
+        legend.text = element_text(size=12),
+        legend.background = element_blank(),
+        legend.title = element_blank(),
+        panel.grid = element_blank(),
+        axis.text.x = element_text(color = "grey10",angle=45, hjust=1,size=10),
+        axis.text.y = element_text(color = "grey10", size = 10),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(color = "grey10", size = 12),
+        plot.title = element_text(color = "grey10", size = 14, face = "bold"),
+        plot.subtitle = element_text(color = "black", size = 10),
+        strip.text.x=element_text(color = "grey10", face = "bold", size=10),
+        strip.background = element_rect(colour=NA, fill=NA)
+  )
+
+final_plot
+
+#Export
+
+ggsave(plot = final_plot, filename = "Figure_2.pdf", width = 19, height = 25, units = "cm") #Saving 10.2 x 12.2 in image
+
+
+#-----------------------        FIGURE 3   -------------------------------
+# Loading the datasets ---------------------------------------------------
+
+setwd("C:/Users/Asus/Desktop/Pippi e news")
+db_cons20= read.xlsx("Bats_news_dataset_R.xlsx", sheetName = "cons2020.R")
+
+db_cons20 <- db_cons20 %>% 
+  filter(Country != "Namibia")  %>%
+  mutate_at(vars(Date,Country),as.factor) %>% 
+  mutate_at(vars(N_art,N_cases),as.integer) 
+
+levels(db_cons20$Country)[8] <- "DR of Congo" #rename the Democratic Republic of the Congo 
+
+# Organizing the database
+db_cons20_2 <-  db_cons20[db_cons20$Country== levels(db_cons20$Country)[1],]
+Art <- rep(db_cons20_2$Quindicina, db_cons20_2$N_art)
+Cas <- rep(db_cons20_2$Quindicina, db_cons20_2$N_cases)
+Type <- c(rep("Articles", length(Art)), rep("COVID-19 cases",length(Cas)) )
+db_cons20_3 <- data.frame(N=c(Art,Cas),Type, Country = rep(levels(db_cons20$Country)[1], length(c(Art,Cas))))
+
+for (i in 2:nlevels(db_cons20$Country)){
+  
+  db_cons20_2 <-  db_cons20[db_cons20$Country== levels(db_cons20$Country)[i], ]
+  Art <- rep(db_cons20_2$Quindicina, db_cons20_2$N_art)
+  Cas <- rep(db_cons20_2$Quindicina, db_cons20_2$N_cases)
+  Type <- c(rep("Articles", length(Art)), rep("COVID-19 cases",length(Cas)) )
+  db_cons20_3 <- rbind(db_cons20_3 , data.frame(N=c(Art,Cas),Type, Country = rep(levels(db_cons20$Country)[i], length(c(Art,Cas)))))
+  
+}
+
+# for having china first
+db_cons20_3$Country <- as.factor(db_cons20_3$Country)
+
+order <- c("China", levels(db_cons20_3$Country)[-6])
+
+#For the text
+text_plot <- db_cons20 %>%
+  group_by(Country) %>%
+  summarise(N = sum(N_art), N2 = sum(N_cases))
+
+col_dens <- c("grey30","blueviolet") # "darkred" "turquoise4"
+
+#Plot
+plot <- db_cons20_3 %>% 
+  mutate_at("Country", ordered, levels=order) %>% 
+  ggplot() + 
+  geom_density(aes(x = N, y=..density.., fill = Type, colour = Type),alpha=0.6,bw = 0.6)+
+  scale_fill_manual(labels=c("Pro-conservation news", "COVID-19 cases"),values=col_dens)+
+  scale_color_manual(labels=c("Pro-conservation news", "COVID-19 cases"),values=col_dens)+
+  facet_wrap(~Country)+
+  scale_x_continuous(breaks = c(1,3,5,7,9,11), labels = c("Feb", "Mar", "Apr","May","Jun","Jul"))+
+  scale_y_continuous(limits = c(0,0.5), breaks = c(0,0.1,0.2,0.3,0.4,0.5), labels=c("0.0","0.1","0.2","0.3","0.4","0.5"))
+
+final_plot <- plot + 
+  geom_text(data=text_plot, x=11.1, y=0.44, aes(label = paste("News:",N)),  colour=col_dens[1],size=3, hjust=1)+
+  geom_text(data=text_plot, x=11.1, y=0.50, aes(label = paste("Cases:",N2)),  colour=col_dens[2],size=3, hjust=1)+
+  theme_classic() +
+  labs(y="Density") +
+  theme(legend.position = "top",
+        legend.text = element_text(size=12),
+        legend.background = element_blank(),
+        legend.title = element_blank(),
+        panel.grid = element_blank(),
+        axis.text.x = element_text(color = "grey10",angle=45, hjust=1,size=10),
+        axis.text.y = element_text(color = "grey10", size = 10),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(color = "grey10", size = 12),
+        plot.title = element_text(color = "grey10", size = 14, face = "bold"),
+        plot.subtitle = element_text(color = "black", size = 10),
+        strip.text.x=element_text(color = "grey10", face = "bold", size=10),
+        strip.background = element_rect(colour=NA, fill=NA)
+  )
+
+final_plot
+
+#Export
+
+ggsave(plot = final_plot, filename = "Figure_3.pdf", width = 19, height = 25, units = "cm") #Saving 10.2 x 12.2 in image

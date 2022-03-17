@@ -34,7 +34,7 @@ source("Script/Functions.R")
 
 # Loading database --------------------------------------------------------
 
-db <- read.csv(file = "Data/Database_Pilot_study.csv", sep = '\t', dec='.', header = TRUE, as.is = FALSE)
+db <- read.csv(file = "Data/Database_Full_study.csv", sep = '\t', dec='.', header = TRUE, as.is = FALSE)
 
 str(db)
 dim(db)
@@ -42,14 +42,14 @@ dim(db)
 # Data cleaning -----------------------------------------------------------
 
 # Selecting paper to analyse
-db <- db %>% filter(Analysis == "yes")
-
+db <- db %>% filter(Analysis == "yes") ; db <- droplevels(db)
 dim(db)
 
 # Checking factor levels
 levels(db$Geography)
 levels(db$Domain)
 levels(db$Method_data_collection)
+
 
 # Calculating proportion of biodiversity
 db$Biodiversity_prop <- rowSums(db[,36:90]) / length(36:90)
@@ -75,7 +75,7 @@ Amelia::missmap(db)
 # all
 ggplot(data = db, aes(x = Publication_year, y = Biodiversity_prop)) + 
   geom_point() +
-  geom_smooth(method = "gam", formula = y ~ s(x), col="purple") +
+  geom_smooth(method = "gam", formula = y ~ x, col="purple") +
   theme_classic()
 
 range(db$Biodiversity_prop, na.rm = TRUE) ; mean(db$Biodiversity_prop, na.rm = TRUE)

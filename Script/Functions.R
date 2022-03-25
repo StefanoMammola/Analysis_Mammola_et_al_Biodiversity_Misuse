@@ -11,7 +11,33 @@
 
 # Plot parameters ---------------------------------------------------------
 
+Y.label <- "Proportion of biodiversity [Phyla/Divisions]"
+
 COL <- c("blue", "palevioletred4", "seagreen4", "orange", "black", "red", "turquoise", "purple")
+
+theme_custom <- function(){
+  theme_bw() +
+    theme(
+      axis.text = element_text(size = 12), 
+      axis.title = element_text(size = 14),
+      axis.line.x = element_line(color="grey10"), 
+      axis.line.y = element_line(color="grey10"),
+      panel.border = element_blank(),
+      panel.grid.major.x = element_blank(),                                          
+      panel.grid.minor.x = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      panel.grid.major.y = element_blank(),  
+      plot.margin = unit(c(1, 1, 1, 1), units = , "cm"),
+      plot.title = element_text(size = 15, vjust = 1, hjust = 0),
+      legend.text = element_text(size = 12),          
+      legend.title = element_blank(),                              
+      legend.position = c(0.65, 0.65), 
+      legend.key = element_blank(),
+      legend.background = element_rect(color = "black", 
+                                       fill = "transparent", 
+                                       size = 2, linetype = "blank"))
+  
+}
 
 # Function ----------------------------------------------------------------
 
@@ -60,3 +86,6 @@ logisticline_max <- function(z,model) {
   eta <- model$coefficients[1] + model$coefficients[2]*z + 1.96*summary(model)$coefficients[2] ;
   1 / (1 + exp(-eta))
 }
+
+# Standard error:
+std <- function(x) sd(x, na.rm = TRUE)/sqrt(length(x))

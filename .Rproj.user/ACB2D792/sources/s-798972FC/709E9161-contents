@@ -27,6 +27,7 @@ library("tidyr")
 library("tidytext")
 library("tidyverse")
 library("wordcloud")
+library("RColorBrewer")
 
 # Source functions and plot parameters ------------------------------------
 
@@ -50,13 +51,14 @@ levels(db$Geography)
 levels(db$Domain)
 levels(db$Method_data_collection)
 
-
 # Calculating proportion of biodiversity
-db$Biodiversity_prop <- rowSums(db[,36:90]) / length(36:90)
-db$Animals_prop      <- rowSums(db[,c(36:70,88)]) / length(c(36:70,88))
-db$Plants_prop       <- rowSums(db[,c(71:75,89)]) / length(c(71:75,89))
-db$Fungi_prop        <- rowSums(db[,c(76:84,90)]) / length(c(76:84,90))
-db$Micro_prop        <- rowSums(db[,c(85:87)]) / length(85:97)
+db$Biodiversity_prop <- rowSums(db[,36:91]) / length(36:91)
+db$Animals_prop      <- rowSums(db[,c(36:70,89)]) / length(c(36:70,89))
+db$Plants_prop       <- rowSums(db[,c(71:75,90)]) / length(c(71:75,90))
+db$Fungi_prop        <- rowSums(db[,c(76:84,91)]) / length(c(76:84,91))
+db$Micro_prop        <- rowSums(db[,c(85:88)])    / length(c(85:88))
+
+colnames(db)
 
 #Title fanciness
 db$Title_fanciness <- rowSums(db[,c(23,24)])
@@ -64,54 +66,41 @@ table(db$Title_fanciness) #too few obs
 
 # Calculating total number of specifics to the title
 db$Title_adjecties <- as.factor(rowSums(db[,27:29]))
+table(db$Title_adjecties)
+
+# Number of biodiversity facets
+db$Facets_biodiversity <- as.factor(rowSums(db[,31:34]))
+table(db$Facets_biodiversity)
 
 # Missing data 
 Amelia::missmap(db)
+
+#biodiversity facets (%)
+round((table(db$Facets_biodiversity)/sum(table(db$Facets_biodiversity)))*100,2)
+
+table(db$Phylogenetic_div)
+table(db$Functional_div)
+table(db$Taxonomic_div)
 
 # Data exploration -------------------------------------------------------
 
 ###### temporal trends ######
 
+table(db$Biodiversity_prop,db$Publication_year)
+
 # all
-ggplot(data = db, aes(x = Publication_year, y = Biodiversity_prop)) + 
-  geom_point() +
-  geom_smooth(method = "gam", formula = y ~ x, col="purple") +
-  theme_classic()
 
-range(db$Biodiversity_prop, na.rm = TRUE) ; mean(db$Biodiversity_prop, na.rm = TRUE)
+range(db$Biodiversity_prop, na.rm = TRUE) ; mean(db$Biodiversity_prop, na.rm = TRUE) ; std(db$Biodiversity_prop)
+nrow(db)
 
-# all (only fieldwork)
-ggplot(data = db[db$Method_data_collection == "Field sampling",], 
-       aes(x = Publication_year, y = Biodiversity_prop)) + 
-  geom_point() +
-  geom_smooth(method = "gam", formula = y ~ s(x), col="purple") +
-  theme_classic()
-
-# animals
-ggplot(data = db[db$Animals_prop>0,], aes(x = Publication_year, y = Animals_prop)) + 
-  geom_point() +
-  geom_smooth(method = "gam", formula = y ~ s(x), col="purple") +
-  theme_classic()
-
-# plants
-ggplot(data = db[db$Plants_prop>0,], aes(x = Publication_year, y = Plants_prop)) + 
-  geom_point() +
-  geom_smooth(method = "gam", formula = y ~ s(x), col="purple") +
-  theme_classic()
-
-# fungi
-ggplot(data = db[db$Fungi_prop>0,], aes(x = Publication_year, y = Fungi_prop)) + 
-  geom_point() +
-  geom_smooth(method = "gam", formula = y ~ s(x), col="purple") +
-  theme_classic()
-
-# micro
-ggplot(data = db[db$Micro_prop>0,], aes(x = Publication_year, y = Fungi_prop)) + 
-  geom_point() +
-  geom_smooth(method = "gam", formula = y ~ s(x), col="purple") +
-  theme_classic()
-
-###### Geographical patterns ######
+(plot1a <- ggplot(data = db, aes(x = Publication_year, y = Biodiversity_prop)) + 
+  geom_point(col = "grey10", fill = "grey30", size = 5, shape = 21, alpha = 0.3) +
+  geom_smooth(method = "lm", formula = y ~ x, col="blue", fill = "blue") +
+  labs(x = "Publication year" , y = Y.label)+
+  annotate(geom="text", x=2000, y=0.35, 
+           label=expression(paste("Mean" %+-% "Standard Error: 0.03" %+-% "0.001")),
+           color="grey10", size = 5)+
+  theme_custom())
 
 box1 <- semi_colon_splitter(input1 = db$Geography,
                             input2 = db$Biodiversity_prop, 
@@ -119,13 +108,13 @@ box1 <- semi_colon_splitter(input1 = db$Geography,
 
 box1$Biodiversity_prop <- as.numeric(as.character(box1$Biodiversity_prop))
 
-ggplot(data = box1 %>% drop_na(Geography,Biodiversity_prop), 
-       aes(x = Geography, y = Biodiversity_prop)) +
-  geom_flat_violin(position = position_nudge(x = 0.2, y = 0), alpha = 0.4, fill= "turquoise3") +
-  geom_boxplot(width = 0.2, outlier.shape = NA, alpha = 0.4,fill= "orangered") +
-  geom_point(position = position_jitter(width = 0.15), size = 1, alpha = 0.7, fill= "grey20") +
-  labs(y = "Biodiversity (Proportion)", x = NULL) +
-  theme_classic()
+(plot1b <- ggplot(data = box1 %>% drop_na(Geography,Biodiversity_prop), 
+                  aes(x = Geography, y = Biodiversity_prop)) +
+    geom_flat_violin(position = position_nudge(x = 0.2, y = 0), alpha = 0.4, fill= "blue", col = "white") +
+    geom_point(position = position_jitter(width = 0.15), size = 1, alpha = 0.7, color = "grey40") +
+    geom_boxplot(width = 0.2, outlier.shape = NA, alpha = 0.4) +
+    labs(y = Y.label, x = NULL) +
+    theme_custom())
 
 box2 <- semi_colon_splitter(input1 = db$Domain,
                             input2 = db$Biodiversity_prop, 
@@ -133,13 +122,13 @@ box2 <- semi_colon_splitter(input1 = db$Domain,
 
 box2$Biodiversity_prop <- as.numeric(as.character(box2$Biodiversity_prop))
 
-ggplot(data = box2 %>% drop_na(Domain,Biodiversity_prop), 
-       aes(x = Domain, y = Biodiversity_prop)) +
-  geom_flat_violin(position = position_nudge(x = 0.2, y = 0), alpha = 0.4, fill= "turquoise3") +
-  geom_boxplot(width = 0.2, outlier.shape = NA, alpha = 0.4,fill= "orangered") +
-  geom_point(position = position_jitter(width = 0.15), size = 1, alpha = 0.7, fill= "grey20") +
-  labs(y = "Biodiversity (Proportion)", x = NULL) +
-  theme_classic()
+(plot1c <- ggplot(data = box2 %>% drop_na(Domain,Biodiversity_prop), 
+                  aes(x = Domain, y = Biodiversity_prop)) +
+    geom_flat_violin(position = position_nudge(x = 0.2, y = 0), alpha = 0.4, fill= "blue", col = "white") +
+    geom_point(position = position_jitter(width = 0.15), size = 1, alpha = 0.7, color = "grey40") +
+    geom_boxplot(width = 0.2, outlier.shape = NA, alpha = 0.4) +
+    labs(y = Y.label, x = NULL) +
+    theme_custom())
 
 box3 <- semi_colon_splitter(input1 = db$Method_data_collection,
                             input2 = db$Biodiversity_prop, 
@@ -147,13 +136,302 @@ box3 <- semi_colon_splitter(input1 = db$Method_data_collection,
 
 box3$Biodiversity_prop <- as.numeric(as.character(box3$Biodiversity_prop))
 
-ggplot(data = box3 %>% drop_na(Method,Biodiversity_prop), 
-       aes(x = Method, y = Biodiversity_prop)) +
-  geom_flat_violin(position = position_nudge(x = 0.2, y = 0), alpha = 0.4, fill= "turquoise3") +
-  geom_boxplot(width = 0.2, outlier.shape = NA, alpha = 0.4,fill= "orangered") +
-  geom_point(position = position_jitter(width = 0.15), size = 1, alpha = 0.7, fill= "grey20") +
-  labs(y = "Biodiversity (Proportion)", x = NULL) +
-  theme_classic()
+(plot1d <- ggplot(data = box3 %>% drop_na(Method,Biodiversity_prop), 
+                  aes(x = Method, y = Biodiversity_prop)) +
+    geom_flat_violin(position = position_nudge(x = 0.2, y = 0), alpha = 0.4, fill= "blue", col = "white") +
+    geom_point(position = position_jitter(width = 0.15), size = 1, alpha = 0.7, color = "grey40") +
+    geom_boxplot(width = 0.2, outlier.shape = NA, alpha = 0.4) +
+    labs(y = Y.label, x = NULL) +
+    theme_custom())
+
+pdf(file = "Figure/Figure_1.pdf", width = 18, height =14)
+ggpubr::ggarrange(plot1a,plot1b,plot1c,plot1d,
+                  common.legend = FALSE,
+                  hjust = -5,
+                  align = "hv",
+                  labels = c("A", "B", "C", "D"),
+                  ncol=2, nrow=2)
+dev.off()
+
+
+# Figure 2 ----------------------------------------------------------------
+
+animal_png <- png::readPNG("Phylopics/Animal.png")
+fungi_png <- png::readPNG("Phylopics/Fungi.png")
+micro_png <- png::readPNG("Phylopics/Micro.png")
+plant_png <- png::readPNG("Phylopics/Plant.png")
+
+(plot2a <- ggplot(data = db[db$Animals_prop>0,], aes(x = Publication_year, y = Animals_prop)) + 
+    geom_point(col = "grey10", fill = "grey30", size = 5, shape = 21, alpha = 0.3) +
+    geom_smooth(method = "glm", formula = y ~ x, 
+                method.args = list(family = quasibinomial(link = "logit")), 
+                col = "blue", fill = "blue") +
+    labs(title = "Only animals", x = NULL , y = Y.label)+
+    xlim(1992,2020)+
+    ylim(0,1)+
+    annotation_custom(grid::rasterGrob(animal_png), xmin = 1992, xmax = 2000, ymin = 0.75, ymax = 1)+ 
+    theme_custom())
+
+(plot2b <- ggplot(db[db$Plants_prop>0,], aes(x = Publication_year, y = Plants_prop)) + 
+    geom_point(col = "grey10", fill = "grey30", size = 5, shape = 21, alpha = 0.3) +
+    geom_smooth(method = "glm", formula = y ~ x, 
+                method.args = list(family = quasibinomial(link = "logit")), 
+                col = "blue", fill = "blue") +
+    labs(title = "Only plants", x = NULL , y = NULL)+
+    xlim(1992,2020)+
+    ylim(0,1)+
+    annotation_custom(grid::rasterGrob(plant_png), xmin = 1992, xmax = 1995, ymin = 0.75, ymax = 1)+ 
+    theme_custom())
+
+(plot2c <- ggplot(data = db[db$Fungi_prop>0,], aes(x = Publication_year, y = Fungi_prop)) + 
+    geom_point(col = "grey10", fill = "grey30", size = 5, shape = 21, alpha = 0.3) +
+    geom_smooth(method = "glm", formula = y ~ x, 
+                method.args = list(family = quasibinomial(link = "logit")), 
+                col = "blue", fill = "blue") +
+    labs(title = "Only fungi", x = "Publication year" , y = Y.label)+
+    xlim(1992,2020)+
+    ylim(0,1)+
+    annotation_custom(grid::rasterGrob(fungi_png), xmin = 1992, xmax = 1997, ymin = 0.75, ymax =1)+ 
+    theme_custom())
+
+(plot2d <- ggplot(data = db[db$Micro_prop>0,], aes(x = Publication_year, y = Micro_prop)) + 
+    geom_point(col = "grey10", fill = "grey30", size = 5, shape = 21, alpha = 0.3) +
+    geom_smooth(method = "glm", formula = y ~ x, 
+                method.args = list(family = quasibinomial(link = "logit")), 
+                col = "blue", fill = "blue") +
+    labs(title = "Only microorganisms", x = "Publication year" , y = NULL)+
+    xlim(1992,2020)+
+    ylim(0,1)+
+    annotation_custom(grid::rasterGrob(micro_png), xmin = 1992, xmax = 1997, ymin = 0.75, ymax = 1)+
+    theme_custom())
+
+pdf(file = "Figure/Figure_2.pdf", width = 16, height =12)
+ggpubr::ggarrange(plot2a,plot2b,plot2c,plot2d,
+                  common.legend = FALSE,
+                  hjust = -5,
+                  align = "hv",
+                  labels = c("A", "B", "C", "D"),
+                  ncol=2, nrow=2)
+dev.off()
+
+# Figure 3 ----------------------------------------------------------------
+
+# Regression model -------------------------------------------------------
+
+colnames(db)
+
+# Subset
+db_glm <- db %>% select(year = Publication_year,
+                        n_aut,
+                        cit = tot_cites,
+                        Method = Method_data_collection,
+                        Phylogenetic_div,      
+                        Functional_div,
+                        Title_geo,
+                        Title_hab,
+                        Title_taxon,
+                        Title_adjecties,
+                        Biodiversity_prop,
+                        Geography,
+                        Domain)
+
+# Converting multiples
+method_split <- strsplit(as.character(db_glm$Method), ";")
+
+method <- c()
+for(i in 1:length(method_split))
+  method <- c(method, ifelse(length(method_split[[i]]) > 1, "Multiple", method_split[[i]]) )
+
+geography_split <- strsplit(as.character(db_glm$Geography), ";")
+
+geography <- c()
+for(i in 1:length(geography_split))
+  geography <- c(geography, ifelse(length(geography_split[[i]]) > 1, "Global", geography_split[[i]]) )
+
+domain_split <- strsplit(as.character(db_glm$Domain), ";")
+
+domain <- c()
+for(i in 1:length(domain_split))
+  domain <- c(domain, ifelse(length(domain_split[[i]]) > 1, "Multiple", domain_split[[i]]) )
+
+db_glm$Method    <- method
+db_glm$Geography <- geography
+db_glm$Domain    <- domain
+
+db_glm <- db_glm %>% mutate_at(vars("Method","Geography","Domain",
+                                    "Title_geo","Title_hab","Title_taxon"), as_factor)
+
+rm(method_split,method,geography,geography_split,domain,domain_split) #clean
+
+# Correcting citation by year (NOTE:: to do better with gam)
+db_glm$cit <- db_glm$cit / db_glm$year
+
+# Dependent var
+db_glm$prop  <- rowSums(db[,36:91])
+db_glm$total <- length(36:91)
+
+#Set baseline
+db_glm <- within(db_glm, Geography <- relevel(Geography, ref = "Global"))
+db_glm <- within(db_glm, Domain    <- relevel(Domain, ref = "Multiple"))
+db_glm <- within(db_glm, Method    <- relevel(Method, ref = "Multiple"))
+
+#Model
+m1  <- glm(cbind(prop,total) ~ year + 
+             cit + 
+             Domain + 
+             Geography + 
+             Method +
+             Title_geo + 
+             Title_hab + 
+             Title_taxon, data = db_glm, family = "binomial")
+
+summary(m1)
+
+# posthoc
+pairs(emmeans::emmeans(m1, ~ Domain), simple="Domain")
+pairs(emmeans::emmeans(m1, ~ Geography), simple="Geography")
+pairs(emmeans::emmeans(m1, ~ Method), simple="Method")
+
+# sjPlot::plot_model(m1, title ="Factors correlating with biodiversity proportion",
+#                    sort.est = FALSE,  vline.color = "grey80",
+#                    show.values = TRUE, value.offset = .3, se = TRUE, show.p = TRUE) + theme_classic()
+# 
+
+# Plot
+Estimates_m1 <- 
+  m1 %>% 
+  summary %>% 
+  magrittr::extract2("coefficients") %>% # extract estimates
+  as.data.frame %>% rownames_to_column("Variable") %>% 
+  dplyr::filter(!row_number() %in% 1) %>%  #remove intercept
+  dplyr::rename(SE = 3, z = 4, p = 5) #rename
+
+Estimates_m1$Variable <- c("Year of publication",
+                           "Citations (normalized by year)",
+                           "Domain [Terrestrial]",
+                           "Domain [Saltwater]",
+                           "Domain [Freshwater]",
+                           "Geographic [Palearctic]",
+                           "Geographic [Afrotropical]",
+                           "Geographic [Indomalayan]",
+                           "Geographic [Neartic]",
+                           "Geographic [Australasian]",
+                           "Geographic [Antartic]",
+                           "Geographic [Neotropical]",
+                           "Method [Review/Opinion]",
+                           "Method [Field sampling]",
+                           "Method [Big data]",
+                           "Method [Other]",
+                           "Method [Citizen science]",
+                           "Method [Simulation]",
+                           "Mention of location - title",
+                           "Mention of habitat - title",
+                           "Mention of taxon/a - title")
+
+MIN <- range(Estimates_m1$Estimate)[1]
+MAX <- range(Estimates_m1$Estimate)[2]
+
+col_p <- ifelse(Estimates_m1$p > 0.05, "grey5", ifelse(Estimates_m1$Estimate>0,"orange","blue") )
+
+#Add rectangle??
+
+(plot_model3 <- ggplot2::ggplot(data = Estimates_m1, aes(Variable, Estimate)) +
+    
+    #geom_tile(geom = 'rect',xmin=1, xmax=2, ymin=MIN, ymax=MAX, color="grey10", alpha=0.8) +
+  
+    geom_hline(lty = 3, size = 0.7, col = "grey50", yintercept = 0) +
+    geom_errorbar(aes(ymin = Estimate-SE, ymax = Estimate+SE), width = 0, col = col_p) +
+    geom_text(aes(Variable, Estimate), 
+              label = round(Estimates_m1$Estimate,2), 
+              vjust = -1, size = 3, col = col_p) +
+    geom_point(size = 2, pch = 21, col = col_p, fill = col_p) +
+    labs(y = expression(paste("Odds ratio" %+-% "Standard Error")),
+         x = NULL)+
+    theme_custom() + coord_flip())
+
+
+pdf(file = "Figure/Figure_3.pdf", width = 12, height =8)
+plot_model3
+dev.off()
+
+
+# Figure 4 ----------------------------------------------------------------
+
+vector <- sort(apply(db[,36:86],2, sum, na.rm = TRUE), decreasing = TRUE)
+
+db2 <- data.frame(Phyla = names(vector), N = vector)
+
+Taxa_to_rename <- ifelse(db2$N<10,db2$N,NA)
+N_to_rename    <- sum(Taxa_to_rename,na.rm=TRUE)
+Taxa_to_rename <- length(na.omit(Taxa_to_rename))
+
+db2 <- db2[ 1 : (nrow(db2)-Taxa_to_rename), ]
+
+db2 <- rbind(db2, data.frame(Phyla = paste0("Others (n = ",Taxa_to_rename,")"), N = N_to_rename))
+
+db2 <- cbind(db2, Type = c(rep("Animal",2),
+                           "Plant",
+                           rep("Animal",2),
+                           "Plant",
+                           "Microorganism",
+                           "Plant",
+                           rep("Animal",3),
+                           "Plant",
+                           "Animal",
+                           "Plant",
+                           "Animal",
+                           "Fungi",
+                           "Microorganism",
+                           rep("Animal",2),
+                           "Fungi",
+                           "Multiple"
+                           ))
+
+db2$Phyla <- factor(db2$Phyla,levels = db2$Phyla)
+
+(figure_4 <- ggplot(db2, aes(x= Phyla, y=N))+
+    geom_bar(aes(fill= Type),stat="identity", alpha=1, colour = "black")  +
+    
+    labs(x = NULL, y = "Count")+
+    
+    scale_fill_manual(values = rev(RColorBrewer::brewer.pal(5, "Blues")))+
+    theme_custom() + theme(axis.text.x = element_text(angle = 70, hjust=1 ))
+)
+
+
+pdf(file = "Figure/Figure_4.pdf", width = 12, height =8)
+figure_4
+dev.off()
+
+# Wordcloud ---------------------------------------------------------------
+
+db_full <- read.csv(file = "Data/Biodiversity_WOS_V2.csv",sep='\t', dec='.',header=TRUE,as.is=FALSE)
+
+db_full$title <- as.character(db_full$title)
+
+# A list of boring and non-useful words, bundled with `tidytext`
+data(stop_words)
+
+# remove all numbers from titles
+db_full$title <- gsub('[0-9]+', '', db_full$title)
+
+# Count words
+Title <- db_full  %>%
+  unnest_tokens(output = title_word,
+                input = title) %>%
+  anti_join(stop_words, by = c("title_word" = "word")) %>%
+  count(title_word, sort = TRUE) 
+
+# Plot
+dev.off()
+Title[3:300,] %>% with(wordcloud(words = title_word, 
+                                 freq = n, 
+                                 max.words = 200,
+                                 scale=c(4,.2),
+                                 random.color=TRUE, color = c("orange","aquamarine3","aquamarine4","darkblue","black")))
+
+#### APPUNTI:::
+
 
 # Adjectives --------------------------------------------------------------
 
@@ -168,8 +446,8 @@ ggplot(data = db %>% drop_na(Title_adjecties,Biodiversity_prop),
 # Trends over time in methods and geography -------------------------------
 
 t1 <- semi_colon_splitter(input1 = db$Method_data_collection,
-                            input2 = db$Publication_year, 
-                            names = c("Method","year"))
+                          input2 = db$Publication_year, 
+                          names = c("Method","year"))
 
 t1_prop <- t1  %>% group_by(year) %>% count(Method)
 t1_tot <- data.frame(table(t1$year)) ; colnames(t1_tot) <- c("year", "Tot")
@@ -225,7 +503,7 @@ y2 <- seq(from = min(t1$year), to = max(t1$year), 1) #temporal series of interes
     geom_ribbon(aes(ymax = logisticline_max(y2, model[[04]]),
                     ymin = logisticline_min(y2, model[[04]]),x = y2),alpha = 0.5,fill=COL[4])+
     geom_ribbon(aes(ymax = logisticline_max(y2, model[[05]]),
-                    ymin = logisticline_min(y2, model[[05]]),x = y2),alpha = 0.5, fill=COL[5])+
+                    ymin = logisticline_min(y2, model[[05]]),x = y2),alpha = 0.5,fill=COL[5])+
    
     #Text
     annotate(geom="text", hjust = 0,vjust = 0.3,
@@ -253,7 +531,7 @@ y2 <- seq(from = min(t1$year), to = max(t1$year), 1) #temporal series of interes
              label = levels(factor(t1$Method))[5],
              color=COL[5])+
      
-    coord_cartesian(xlim = c(2000, 2020), # This focuses the x-axis on the range of interest
+    coord_cartesian(xlim = c(1992, 2020), # This focuses the x-axis on the range of interest
                     clip = 'off') +   # This keeps the labels from disappearing
     
     theme_classic() + theme(plot.margin = unit(c(0.5,4,0.5,0.5), 'cm'))
@@ -370,7 +648,7 @@ y2 <- seq(from = min(t2$year), to = max(t2$year), 1) #temporal series of interes
              label = levels(factor(t2$Geography))[8],
              color=COL[8])+
     
-    coord_cartesian(xlim = c(2000, 2020), # This focuses the x-axis on the range of interest
+    coord_cartesian(xlim = c(1992, 2020), # This focuses the x-axis on the range of interest
                     clip = 'off') +   # This keeps the labels from disappearing
     
     theme_classic() + theme(plot.margin = unit(c(0.5,4,0.5,0.5), 'cm'))
@@ -420,7 +698,7 @@ y2 <- seq(from = min(t3$year), to = max(t3$year), 1) #temporal series of interes
              color=COL[1],alpha=1)+
     
     annotate(geom="text", hjust = 0,vjust = 0,
-             x= 2020.5, y= logisticline_max(y2, model[[02]])[21]-0.03, 
+             x= 2020.5, y= logisticline_max(y2, model[[02]])[21], 
              label = "Phylogenetic diversity",
              color=COL[2],alpha=1)+
     
@@ -434,7 +712,7 @@ y2 <- seq(from = min(t3$year), to = max(t3$year), 1) #temporal series of interes
              label = "Other diversity",
              color=COL[4],alpha=1)+
     
-    coord_cartesian(xlim = c(2000, 2020), # This focuses the x-axis on the range of interest
+    coord_cartesian(xlim = c(1992, 2020), # This focuses the x-axis on the range of interest
                     clip = 'off') +   # This keeps the labels from disappearing
     
     theme_classic() + theme(plot.margin = unit(c(0.5,4,0.5,0.5), 'cm'))
@@ -449,14 +727,16 @@ db_glm <- db %>% select(year = Publication_year,
                         n_aut,
                         cit = tot_cites,
                         Method = Method_data_collection,
-                        Taxonomic_div, Phylogenetic_div, Functional_div,
+                        Facets_biodiversity,
                         Title_geo,
                         Title_hab,
                         Title_taxon,
+                        Title_adjecties,
                         Biodiversity_prop,
                         Geography,
                         Domain)
-
+str(db_glm)
+db_glm$Facets_biodiversity <- as.numeric(db_glm$Facets_biodiversity)
 # Converting multiples
 method_split <- strsplit(as.character(db_glm$Method), ";")
 
@@ -481,10 +761,7 @@ db_glm$Geography <- geography
 db_glm$Domain    <- domain
 
 db_glm <- db_glm %>% mutate_at(vars("Method","Geography","Domain",
-                                    "Taxonomic_div","Phylogenetic_div","Functional_div",
                                     "Title_geo","Title_hab","Title_taxon"), as_factor)
-
-str(db_glm)
 
 rm(method_split,method,geography,geography_split,domain,domain_split) #clean
 
@@ -492,15 +769,17 @@ rm(method_split,method,geography,geography_split,domain,domain_split) #clean
 db_glm$cit <- db_glm$cit / db_glm$year
 
 # Dependent var
-db_glm$prop  <- rowSums(db[,36:90])
-db_glm$total <- length(36:90)
+db_glm$prop  <- rowSums(db[,36:91])
+db_glm$total <- length(36:91)
 
 #Set baseline
 db_glm <- within(db_glm, Geography <- relevel(Geography, ref = "Global"))
 db_glm <- within(db_glm, Domain    <- relevel(Domain, ref = "Multiple"))
+db_glm <- within(db_glm, Method    <- relevel(Method, ref = "Multiple"))
 
 # Fitting the model
-m1  <- glm(cbind(prop,total) ~ year + n_aut + cit  + Domain + Geography + Taxonomic_div + Phylogenetic_div + Functional_div, 
+m1  <- glm(cbind(prop,total) ~ year + n_aut + cit + Domain + Geography + 
+             Title_geo + Title_hab  + Title_taxon,
            data = db_glm, family = "binomial")
 
 performance::check_model(m1)
@@ -514,7 +793,12 @@ str(db_glm)
 db_glm %>% ggplot(aes(x=Geography , y = n_aut)) + geom_boxplot() + theme_classic()
 
 # drop n_aut
-m2  <- glm(cbind(prop,total) ~ year + cit + Domain + Geography + Taxonomic_div + Phylogenetic_div + Functional_div, 
+m2  <- glm(cbind(prop,total) ~ year + 
+                                cit + 
+                              Domain + 
+                           Geography + 
+             Method +
+                              Title_geo + Title_hab  + Title_taxon, 
            data = db_glm, family = "binomial")
 
 performance::check_collinearity(m2)
@@ -522,54 +806,69 @@ performance::check_model(m2)
 performance::check_overdispersion(m2)
 
 sjPlot::plot_model(m2, title ="Factors correlating with biodiversity proportion",
-                   sort.est = TRUE,  vline.color = "grey80",
+                   sort.est = FALSE,  vline.color = "grey80",
                    show.values = TRUE, value.offset = .3, se = TRUE, show.p = TRUE) + theme_classic()
 
 
 parameters::model_parameters(m2)
-MuMIn::r.squaredLR(m2)[[1]]
 
 # quasibinomial?
-m3  <- glm(cbind(prop,total) ~ year + cit + Domain + Geography + Taxonomic_div + Phylogenetic_div + Functional_div, data = db_glm, family = "quasibinomial")
+table(db$Biodiversity_prop)
 
-performance::check_collinearity(m3)
-performance::check_model(m3)
-
-colnames(db_glm)
-
-
-m2  <- glm(cbind(prop,total) ~ year + cit + Domain + Geography + Method + Taxonomic_div + Phylogenetic_div + Functional_div, 
-           data = db_glm, family = "binomial")
+m2  <- glm(cbind(prop,total) ~ year + 
+             cit + 
+             Domain + 
+             Geography + 
+             Method +
+             Title_geo + 
+             Title_hab + 
+             Title_taxon, data = db_glm, family = "binomial")
 
 summary(m2)
 
-# m2bis  <- glm(cbind(prop,total) ~ year + cit + Domain + as.factor(Title_geo) + as.factor(Title_taxon) + as.factor(Title_hab), data = db_glm, family = "binomial")
-# 
-# performance::check_collinearity(m2bis)
-# performance::check_model(m2bis)
-# 
-# sjPlot::plot_model(m2bis, title ="Factors correlating with biodiversity proportion",
-#                    sort.est = TRUE,  vline.color = "grey60",
-#                    show.values = TRUE, value.offset = .3, se = TRUE, show.p = FALSE) + theme_classic()
+sjPlot::plot_model(m2, title ="Factors correlating with biodiversity proportion",
+                   sort.est = FALSE,  vline.color = "grey80",
+                   show.values = TRUE, value.offset = .3, se = TRUE, show.p = TRUE) + theme_classic()
+
+MuMIn::r.squaredLR(m2)[[1]]
+
+
+m2_bis  <- glm(cbind(prop,total) ~ year + 
+             cit + 
+             Domain + 
+             Geography + 
+             Method +
+             Title_geo + 
+             Title_hab + 
+             Title_taxon, data = db_glm[db_glm$prop>0,], family = "binomial")
+
+sjPlot::plot_model(m2_bis, title ="Factors correlating with biodiversity proportion",
+                   sort.est = FALSE,  vline.color = "grey80",
+                   show.values = TRUE, value.offset = .3, se = TRUE, show.p = TRUE) + theme_classic()
+
 
 # Wordcloud ---------------------------------------------------------------
 
-db_full <- read.csv(file = "BIODIVERSITY_V3.csv",sep='\t', dec='.',header=TRUE,as.is=FALSE)
+db_full <- read.csv(file = "Data/Biodiversity_WOS_V2.csv",sep='\t', dec='.',header=TRUE,as.is=FALSE)
+
+db_full$title <- as.character(db_full$title)
 
 # A list of boring and non-useful words, bundled with `tidytext`
 data(stop_words)
 
+# remove all numbers from titles
+db_full$title <- gsub('[0-9]+', '', db_full$title)
+
 # Count words
-Title <- db_full %>%
-  mutate(title = as.character(title)) %>%
+Title <- db_full  %>%
   unnest_tokens(output = title_word,
                 input = title) %>%
   anti_join(stop_words, by = c("title_word" = "word")) %>%
-  count(title_word, sort = TRUE) 
+   count(title_word, sort = TRUE) 
 
 # Plot
 dev.off()
-Title[2:100,] %>% with(wordcloud(words = title_word, 
+Title[3:300,] %>% with(wordcloud(words = title_word, 
                                          freq = n, 
                                          max.words = 200,
                                          scale=c(4,.2),

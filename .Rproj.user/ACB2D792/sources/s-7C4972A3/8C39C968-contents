@@ -1,0 +1,921 @@
+###############################################################
+
+## Global survey
+## Nanni V., Piano E., Cardoso, P., Isaia M., Mammola, S.
+
+## ------------------------------------------------------------------------
+# 'R script to reproduce the analyses'
+## ------------------------------------------------------------------------
+
+# Analysis performed with R (v. R 4.1.0) and R studio (v. 1.4.1103)
+# Authors (code): Stefano Mammola, Veronica Nanni, Elena Piano
+# Location: Torino, November 2021
+
+###############################################################
+
+# clean the workspace -----------------------------------------------------
+
+rm(list = ls())
+
+# Loading R package -------------------------------------------------------
+
+library("bayesplot")
+library("brms")
+library("colorspace")
+library("ggpubr")
+library("ggplot2")
+library("HDInterval")
+library("tidyverse")
+library("scatterpie")
+library("raster")
+library("ggmap")
+
+# Setting STAN option -----------------------------------------------------
+
+library("cmdstanr")
+options(brms.backend = "cmdstanr")
+
+# Parameters for plots ----------------------------------------------------
+
+# Colors
+color_maps    <- c("black","steelblue","orange")
+color_threats <- c("grey20","#3690c0")
+color_conserv <- c("grey20","#8856a7")
+
+# Themes for plots (ggplot2)
+theme_custom0 <- function(){
+  theme_minimal() +
+    theme(axis.text = element_text(size = 10), 
+      axis.title = element_text(size = 11),
+      axis.line.x = element_line(color="black"), 
+      axis.line.y = element_line(color="black"),
+      panel.border = element_blank(),
+      panel.grid.major.x = element_blank(),                                          
+      panel.grid.minor.x = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      panel.grid.major.y = element_blank(),  
+      plot.margin = unit(c(0.8, 0.8, 0.8, 0.8), units = , "cm"),
+      plot.title = element_text(size = 12, face = "bold", vjust = 1, hjust = 0),
+      strip.text = element_text(size = 11),
+      legend.text = element_text(size = 10),          
+      legend.title = element_blank(),                              
+      legend.position = "bottom", 
+      legend.key = element_blank(),
+      legend.background = element_rect(color = "black", 
+                                       fill = "transparent", 
+                                       size = 2, linetype = "blank"))}
+
+theme_custom_region <- function(){
+  theme_minimal() +
+    theme(axis.text = element_text(size = 10), 
+          axis.title = element_text(size = 11),
+          axis.line.x = element_line(color="black"), 
+          axis.line.y = element_line(color="black"),
+          panel.border = element_blank(),
+          panel.grid.major.x = element_blank(),                                          
+          panel.grid.minor.x = element_blank(),
+          panel.grid.minor.y = element_blank(),
+          panel.grid.major.y = element_blank(),  
+          plot.margin = unit(c(0.8, 0.8, 0.8, 0.8), units = , "cm"),
+          plot.title = element_text(size = 12, face = "bold", vjust = 1, hjust = 0),
+          strip.text = element_text(size = 11),
+          legend.text = element_text(size = 8),          
+          legend.title = element_blank(),                              
+          legend.position = "bottom", 
+          legend.key = element_blank(),
+          legend.background = element_rect(color = "black", 
+                                           fill = "transparent", 
+                                           size = 2, linetype = "blank"))}
+
+# Create vector of names for plots
+Variable_rename <- c("Urbanisation",
+                     "Agriculture & Forestry",
+                     "Tourism & Recreation",          
+                     "Mining",
+                     "Water management & Dams",
+                     "Wildfires",             
+                     "Pollution",
+                     "Invasive species",
+                     "Diseases",              
+                     "Climate change",
+                     "Poaching & Hunting",
+                     "Geological events",
+                     "Other threats",
+                     "Land protection",
+                     "Land management",       
+                     "Species management",
+                     "Educational activities",
+                     "Legislation & Policy",
+                     "Incentives",
+                     "Other protection measures")
+
+Score_rename <- c("Not\nrelevant",
+                  "Little\nrelevant",
+                  "Somewhat\nrelevant",
+                  "Very\nrelevant",
+                  "Most\nrelevant")
+
+Posteriors_rename <- c("Intercept 1","Intercept 2","Intercept 3","Intercept 4",
+                       "Biogeography [Australian]",
+                       "Biogeography [Eastern Palearctic]",
+                       "Biogeography [IndoMalayan]",
+                       "Biogeography [Nearctic]",
+                       "Biogeography [Neotropical]",
+                       "Biogeography [Western Palearctic]",
+                       "Taxon [Aquatic invertebrates]",
+                       "Taxon [Bats]",
+                       "Taxon [Cavefish]",
+                       "Taxon [Microorganisms]",
+                       "Taxon [None specific]",
+                       "Taxon [Terrestrial vertebrates]",
+                       "Taxon [Terrestrial invertebrates]",
+                       "Education [Random effect]",
+                       "Profession [Random effect]")
+
+# Create vectors for order of variables
+
+Order_threats <- c("Climate change",
+                   "Geological events",
+                   "Urbanisation",
+                   "Agriculture & Forestry",
+                   "Wildfires",
+                   "Water management & Dams",
+                   "Tourism & Recreation",
+                   "Pollution",
+                   "Mining",
+                   "Invasive species",
+                   "Diseases",
+                   "Poaching & Hunting",
+                   "Other threats")
+
+Order_conserv <- c("Land protection",
+                   "Land management",       
+                   "Species management",
+                   "Legislation & Policy",
+                   "Incentives",
+                   "Educational activities",
+                   "Other protection measures")
+
+Order_species <- c("Bats",
+                   "Terrestrial vertebrates",
+                   "Terrestrial invertebrates",
+                   "Cavefish",
+                   "Aquatic amphibians",       
+                   "Aquatic invertebrates",
+                   "Microorganisms")
+
+Order_region <- c("Afrotropical", 
+                  "Neotropical", 
+                  "Indo-Malayan", 
+                  "Australasian", 
+                  "Nearctic", 
+                  "Eastern Palearctic",
+                  "Western Palearctic")
+
+###############################################################
+
+## DATA PREPARATION:
+
+###############################################################
+
+# Loading the Database ----------------------------------------------------
+db <- read.csv(file = "Data/Database_clean.csv", sep = '\t', dec = '.', header = TRUE, as.is = FALSE)
+
+str(db) #check structure of the database
+summary(db) #summary of variables
+
+# Data exploration --------------------------------------------------------
+
+# Balanced levels?
+table(db$Experience)
+table(db$Education) #several PhDs
+table(db$Profession) #consider merging
+table(db$Biogeography)
+table(db$System)
+table(db$Taxon) #unbalanced
+
+# Merging levels for analysis
+db$Education2  <- db$Education
+db$Profession2 <- db$Profession
+db$Taxon2      <- db$Taxon
+
+levels(db$Education2)   <- c("non-PhD","PhD","non-PhD","non-PhD")
+levels(db$Profession2)  <- c(rep("Others",4),"Researcher") 
+
+levels(db$Taxon2)[c(7,8)] <- c("Terrestrial vertebrates","Terrestrial vertebrates")
+
+# Do we have all scores levels for each variable?
+for(i in 1:20)
+  db[,i+7] <- as.factor(as.character(db[,i+7]))
+  
+# Adding missing level to educational activities:
+db$Land_protection <- factor(db$Land_protection, levels = c("1",levels(db$Land_protection)))
+db$Educational_activities <- factor(db$Educational_activities, levels = c("1",levels(db$Educational_activities)))
+
+# Order factors
+for(i in 1:20)
+  db[,i+7] <- ordered(db[,i+7], levels = c("1", "2", "3", "4", "5"))
+
+###############################################################
+
+## FIGURE 1:
+
+###############################################################
+
+# Load map data
+world <- map_data("world")
+biog_regions <- raster::shapefile("Data/Bioregions/regioni biogeografiche.shp")
+
+# Reorder System
+db$System <- factor(db$System, c("Terrestrial","Freshwater","Saltwater"))
+
+# Summary stats
+pie_1 <- data.frame(table(db$Biogeography,db$System))
+
+radius <- data.frame(sqrt(table(db$Biogeography))) ; rownames(radius) <- NULL
+n <- data.frame(table(db$Biogeography)) ; rownames(radius) <- NULL
+
+pie <- data.frame(region = levels(pie_1$Var1),
+                  n =  n$Freq,
+                  long  = c(22, 140.0, 120, 82.0, -106.0, -57.0, 22.0),
+                  lat  = c(2, -23.5, 50, 17.0, 49.0, -17.0, 49.0),
+                  Terrestrial = pie_1$Freq[1:nlevels(pie_1$Var1)],
+                  Freshwater = pie_1$Freq[c(nlevels(pie_1$Var1)+1):(2*c(nlevels(pie_1$Var1)))],
+                  Saltwater = pie_1$Freq[(2*(c(nlevels(pie_1$Var1)))+1):c(nrow(pie_1))],
+                  radius = radius$Freq*1.5)
+
+# Figure 1A::
+map1 <- ggplot() +
+  geom_map(map = world, data = world,
+           aes(map_id = region), 
+           color = "gray65", fill = "gray65", size = 0.3) +
+  labs(title = NULL) + ylim(-56.8,90)+ xlim(-180,195)+
+  
+  #Eastern Palearctic
+  annotate(geom="text", x=123, y=63, label="Eastern Palearctic",
+           color="black", size = 3.5)+
+  
+  #Western Palearctic
+  annotate(geom="text", x=23, y=72, label="Western Palearctic",
+           color="black", size = 3.5)+
+  
+  #Nearctic
+  annotate(geom="text", x=-108, y=65, label="Nearctic",
+           color="black", size = 3.5)+
+  
+  #Neotropical
+  annotate(geom="text", x=-60, y=2, label="Neotropical",
+           color="black", size = 3.5)+
+  
+  #Afrotropical
+  annotate(geom="text", x=23, y=-7, label="Afrotropical",
+           color="black", size = 3.5)+
+  
+  #Indomalayan
+  annotate(geom="text", x=85, y=5, label="Indo-Malayan",
+           color="black", size = 3.5)+
+  
+  #Australasian
+  annotate(geom="text", x=150, y=-40, label="Australasian",
+           color="black", size = 3.5)+
+  
+  theme_bw() + theme(
+    axis.text.x  = element_blank(), 
+    axis.text.y  = element_blank(),
+    axis.title.y = element_blank(),
+    axis.title.x = element_blank(), 
+    axis.line.x = element_blank(), 
+    axis.line.y = element_blank(),
+    panel.border = element_blank(),
+    panel.grid.major.x = element_blank(),                                          
+    panel.grid.minor.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.major.y = element_blank(), 
+    axis.ticks = element_blank(),
+    plot.margin = unit(c(1,1,1,1), 'cm'),
+    plot.title = element_text(size = 18, vjust = 1, hjust = 0),
+    legend.text = element_text(size = 8),          
+    legend.title = element_blank(),                              
+    legend.position = c(0.1, 0.2), 
+    legend.key = element_blank(),
+    legend.background = element_rect(color = "black", 
+                                     fill = "white", 
+                                     size = 2, linetype = "blank"))
+  
+map2 <- map1 + geom_scatterpie(aes(x=long, y= lat, group= region, r=radius),
+                               data= pie, cols = c("Terrestrial","Freshwater","Saltwater"),
+                               alpha=.9) + theme(legend.position = "top",legend.text = element_text(size = 8))+ 
+  geom_scatterpie_legend(pie$radius, x= -150, y= -35, n = 2, labeller = function (x) x=c(min(pie$n),max(pie$n)))+
+  scale_fill_manual("",labels=c("Terrestrial","Freshwater","Saltwater"), values = color_maps)
+
+
+(map3 <- map2 + geom_path(data = fortify(biog_regions),
+                          aes(x = long, y = lat, group = group),
+                          color = 'black', size = .2))
+
+# Barplots ----------------------------------------------------------------
+
+# subsetting only unique respondent
+db_unique <- db[unique(db$ID),]
+
+# reorder & rename factors
+db_unique$Education <- factor(db_unique$Education, 
+                       c("Primary/Secondary","University/College (Bachelor)","Master","PhD"))
+
+levels(db_unique$Education) <- c("Primary & Secondary", "Bachelor & Master", "Bachelor & Master", "PhD")
+
+db_unique$Profession <- factor(db_unique$Profession, 
+                        c("Researcher/Scientist","Recreational caver/Speleologist","Educator","Manager/Decision Maker","Other"))
+
+levels(db_unique$Profession) <- c("Researcher & Scientist",
+                                  "Caver & Speleologist",
+                                  "Educator",
+                                  "Manager & Decision Maker",
+                                  "Other professional")
+
+db_unique$Experience <- factor(db_unique$Experience, 
+                               c("Less than 5 years.","Between 5 and 10 years.","Between 10 and 20 years.","Over 20 years."))
+
+levels(db_unique$Experience) <- c("< 5 years",
+                                  "5 - 10 years",
+                                  "10 - 20 years",
+                                  "> 20 years")
+
+# Figure 1B::
+bar_1 <- data.frame(table(db_unique$System,db_unique$Education))
+
+(bar_p1 <-  ggplot(bar_1, aes(x=Var2,y=Freq, fill=Var1)) +
+    
+    geom_bar(stat="identity",position=position_dodge(), alpha=1,color = "grey20")+
+    geom_text(aes(label=Freq), vjust=-1, color="black",
+              position = position_dodge(0.9), size=2.5)+
+    ylim(0,65)+
+    
+    scale_fill_manual("",labels=c("Terrestrial", "Freshwater", "Saltwater"),values=color_maps)+
+    labs(title="B) What is your level of education?", 
+         subtitle = NULL,x=NULL, y = NULL)+
+    theme_custom_region()+
+    theme(legend.position = "none",
+          axis.text.x = element_text(angle = 45, vjust = 1, hjust=1,
+                                     face = "plain"),
+          plot.margin = unit(c(0.5,0.5,0.5,0.5), 'cm'))
+)
+
+## System by Profession
+bar_2 <- data.frame(table(db_unique$System,db_unique$Profession))
+
+(bar_p2 <-  ggplot(bar_2, aes(x=Var2,y=Freq, fill=Var1)) +
+    
+    geom_bar(stat="identity",position=position_dodge(), alpha=1,color = "grey20")+
+    geom_text(aes(label=Freq), vjust=-1, color="black",
+              position = position_dodge(0.9), size=2.5)+
+    ylim(0,90)+
+    
+    scale_fill_manual("",labels=c("Terrestrial", "Freshwater", "Saltwater"),values=color_maps)+
+    labs(title="C) What is your professional status?", subtitle = NULL,x=NULL, y = NULL)+
+    theme_custom_region()+
+    theme(legend.position = "none",
+          axis.text.x = element_text(angle = 45, vjust = 1, hjust=1,
+                                     face = "plain"),
+          plot.margin = unit(c(0.5,0.5,0.5,0.5), 'cm'))
+  )
+
+## System by Experience
+bar_3 <- data.frame(table(db_unique$System,db_unique$Experience))
+
+(bar_p3 <-  ggplot(bar_3, aes(x=Var2,y=Freq, fill=Var1)) +
+    
+    geom_bar(stat="identity",position=position_dodge(), alpha=1,color = "grey20")+
+    geom_text(aes(label=Freq), vjust=-1, color="black",
+              position = position_dodge(0.9), size=2.5)+
+    ylim(0,45)+
+   
+    scale_fill_manual("",labels=c("Terrestrial", "Freshwater", "Saltwater"),values=color_maps)+
+    labs(title="D) What is your academic age?", subtitle = NULL,x=NULL, y = NULL)+
+    theme_custom_region()+
+    theme(legend.position = "none",
+          axis.text.x = element_text(angle = 45, vjust = 1, hjust=1,
+                                     face = "plain"),
+          plot.margin = unit(c(0.5,0.5,0.5,0.5), 'cm'))
+)
+
+# Arrange on a plate -------------------------------------------------------
+
+pdf(file = "Figures/Figure_1.pdf", width = 12, height =11)
+
+ggpubr::ggarrange(map3,
+                  ggpubr::ggarrange(bar_p1, 
+                                    bar_p2, 
+                                    bar_p3,
+                                    ncol = 3, nrow = 1, align = "hv"), 
+                  common.legend = FALSE,
+                  labels = "A",
+                  nrow=2)
+
+dev.off()
+
+###############################################################
+
+## FULL MODEL:
+
+###############################################################
+
+# Generating models in a loop for all region and species -------------------------------------
+      
+model <- list()
+
+# Takes several minutes  . . .
+for(i in 1 : 20){
+  
+  # Generate the formula::
+  formula_brms <- as.formula(paste0(colnames(db)[i+7], " ~ Biogeography + Taxon2 + (1|Profession) + (1|Education)"))
+  
+  # Fit the model:: 
+  model[[i]] <- brms::brm(formula_brms, 
+                          data = db, 
+                          family = cumulative(link = "logit", threshold = "equidistant"), 
+                          cores = 4, #Change with your cores
+                          chains = 4, 
+                          iter = 2000, 
+                          sample_prior = TRUE,
+                          control = list(max_treedepth = 15, adapt_delta = 0.99)) #to remove divergent transmissions
+  
+  # Save the models::
+  saveRDS(model[[i]], file = paste0("Model/", i ,"_", colnames(db)[i+7],".rds"))
+  
+}
+
+warnings() #Rows containing NAs were excluded from the model. x20
+
+# Data validation::
+for(i in 1:length(model))
+  print(mcmc_plot(model[[i]], type = "trace"))
+# Model for "Other threats" and Other protection measures".
+
+# Generating predictions in a loop -------------------------------
+
+# To read the saved models if needed:: 
+model <- list()
+for(i in 1:20)
+  model[[i]] <- readRDS(file = paste0("Model/", i ,"_", colnames(db)[i+7],".rds"))
+
+for(i in 1 : length(model)) {
+  
+  # Take the i model::
+  model_i <- model[[i]]
+  
+  # Predict::
+  pred_j  <- predict(model_i)
+  
+  # For missing levels::
+  if(ncol(pred_j)<5)
+    pred_j <- cbind(rep(0,nrow(pred_j)),pred_j)
+
+  # Database::
+  pred_j <- data.frame(Variable = rep(colnames(db)[i+7], 10),
+                       Score = rep(as.character(1:5),2), 
+                       Vote = c(data.frame(table(db[,i+7]))$Freq/sum(data.frame(table(db[,i+7]))$Freq),  apply(pred_j, 2, mean)),
+                       Type = c(rep("Observed",5),rep("Predicted",5)), 
+                       sd = c(rep(NA,5),apply(pred_j, 2, sd)))
+  # Store::
+    if(i == 1)
+      pred_full <- pred_j
+    else
+      pred_full <- rbind(pred_full, pred_j)
+}
+
+# Converting as factor and sorting correctly::
+pred_full$Variable <- as.factor(pred_full$Variable)
+pred_full$Score    <- as.factor(pred_full$Score)
+pred_full$Type     <- as.factor(pred_full$Type)
+
+# Reorder factor levels::
+pred_full$Variable <- factor(pred_full$Variable, levels = colnames(db)[8:27])
+
+###############################################################
+
+## FIGURE 2A ---> Threats
+
+###############################################################
+
+# Subsetting Threats::
+Threats <- pred_full[pred_full$Variable %in% colnames(db)[8:20],]
+Threats$Variable <- droplevels(Threats$Variable)
+
+# Renaming variables for plot::
+levels(Threats$Variable) <- Variable_rename[1:13]
+levels(Threats$Score) <- Score_rename
+
+# Subsetting predicted values::
+Threats_sub <- Threats[Threats$Type == "Predicted", ]
+
+# Change order
+Threats_sub$Variable <- factor(Threats_sub$Variable, levels = rev(Order_threats))
+#Threats_sub$Score <- factor(Threats_sub$Score, levels = rev(levels(Threats_sub$Score)))
+
+# Plot::
+(Figure_2A <- ggplot(data = Threats_sub, 
+                    aes(x = Variable, 
+                        y = Vote, fill = Score)) +
+    geom_bar(col = "grey10", position = "stack", stat = "identity")+
+    coord_flip() + 
+    labs(title = "A) How relevant is each threat?",
+         #subtitle = "1 = not relevant at all ; 5 = most relevant",
+         x = NULL, 
+         y = "Proportion of votes [predicted values]")+
+    scale_fill_brewer(palette="PuBu", direction = 1)+ #-1 revert order of the palette
+    theme_custom_region())
+
+###############################################################
+
+## FIGURE 2B --- Conservation measures
+
+###############################################################
+
+# Subsetting Conservation::
+Conserv <- pred_full[pred_full$Variable %in% colnames(db)[21:27],]
+Conserv$Variable <- droplevels(Conserv$Variable)
+
+# Renaming variables for plot::
+levels(Conserv$Variable) <- Variable_rename[14:20]
+levels(Conserv$Score) <- Score_rename
+
+# Subsetting predicted values::
+Conserv_sub <- Conserv[Conserv$Type == "Predicted", ]
+
+# Change order
+Conserv_sub$Variable <- factor(Conserv_sub$Variable, levels = rev(Order_conserv))
+
+# Plot::
+(Figure_2B <- ggplot(data = Conserv_sub, 
+                     aes(x = Variable, 
+                         y = Vote, fill = Score)) +
+    geom_bar(col = "grey10", position = "stack", stat = "identity")+
+    coord_flip() + 
+    labs(title = "B) How relevant is each conservation measure?",
+         #subtitle = "1 = not relevant at all ; 5 = most relevant",
+         x = NULL, 
+         y = "Proportion of votes [predicted values]")+
+    scale_fill_brewer(palette="BuPu")+ #PRGn
+    theme_custom_region())
+
+###############################################################
+
+## FIGURE 2
+
+###############################################################
+
+pdf("Figures/Figure_2.pdf", width = 12, height = 6)
+ggpubr::ggarrange(Figure_2A,Figure_2B, common.legend = FALSE,ncol=2)
+dev.off()
+
+###############################################################
+
+## FIGURE S1 & S2
+
+###############################################################
+
+# Change order
+Threats$Variable <- factor(Threats$Variable, levels = Order_threats)
+Conserv$Variable <- factor(Conserv$Variable, levels = Order_conserv)
+
+# Plot S1::
+pdf("Figures/Figure_S1.pdf", width = 10, height = 11)
+
+(Figure_S1 <- ggplot(data = Threats,
+                     aes(y = Vote, x = Score, fill = Type)) + 
+    
+    facet_wrap( ~ Variable, nrow = 7, ncol = 2) +
+    
+    geom_bar(col = "grey10", stat="identity", position=position_dodge()) +
+    labs(title = "How relevant is each of the following threats?",
+         #subtitle = "1 = not relevant ; 5 = most relevant",
+         x = NULL, y = "Proportion of votes")+
+    
+    scale_fill_manual(values = color_threats)+
+    
+    geom_errorbar(aes(ymin = Vote-sd, ymax = Vote+sd), width=.2,
+                  position=position_dodge(.9)) + 
+    
+    theme_custom0())
+
+dev.off()
+
+# Plot S2::
+
+pdf("Figures/Figure_S2.pdf", width = 8, height = 9)
+
+(Figure_S2 <- ggplot(data = Conserv,
+                    aes(y = Vote, x = Score, fill = Type)) + 
+    
+    facet_wrap(~Variable, nrow = 4, ncol = 2) +
+    
+    geom_bar(col = "grey10", stat="identity", position=position_dodge()) +
+    labs(title = "How relevant is each of the following conservation measure?",
+         #subtitle = "1 = not relevant ; 5 = most relevant",
+         x = NULL, 
+         y = "Proportion of votes")+
+    
+    scale_fill_manual(values = color_conserv)+
+    
+    geom_errorbar(aes(ymin = Vote-sd, ymax = Vote+sd), width=.2,
+                  position=position_dodge(.9)) + 
+    
+    theme_custom0())
+
+dev.off()
+
+###############################################################
+
+## PREDICTION FOR SPECIES:
+
+###############################################################
+  
+# Generating predictions in a loop -------------------------------
+
+# Takes about 3 minutes . . .
+for(i in 1 : length(model)) {
+  
+  # Take the i model::
+  model_i <- model[[i]]
+  
+  # Predict for each biogeographic region::
+  for(j in 1 : nlevels(model_i$data$Taxon2)) {
+    
+    pred_j  <- predict(model_i, 
+                       newdata = model_i$data[model_i$data$Taxon2 == levels(model_i$data$Taxon2)[j],])
+  
+    #add missing levels if any::
+    if(ncol(pred_j)<5)
+      pred_j <- cbind(rep(0,nrow(pred_j)),pred_j)
+    
+    pred_j <- data.frame(Score = as.character(1:5), 
+                         Vote  =  apply(pred_j, 2, mean), #some factors miss the first level
+                         sd    =  apply(pred_j, 2, sd), #some factors miss the first level
+                         Species = rep(levels(model_i$data$Taxon2)[j],5))
+    
+    if(j == 1)
+      pred <- pred_j
+    else
+      pred <- rbind(pred, pred_j)
+    
+  }
+  
+  #Store the final prediction::
+  pred <- data.frame(pred, Variable = rep(colnames(db)[i+7], nrow(pred)))
+  
+  if(i== 1)
+    Species <- pred
+  else
+    Species <- rbind(Species, pred)
+}
+
+# Converting as factor and sorting correctly::
+Species$Variable <- as.factor(Species$Variable)
+Species$Score    <- as.factor(Species$Score)
+Species$Species  <- as.factor(Species$Species)
+
+#Removing the level "None specific"
+Species <- Species[Species$Species != "None specific",] ; Species$Species <- droplevels(Species$Species)
+
+# Reorder factor levels::
+Species$Variable <- factor(Species$Variable, levels = colnames(db)[8:27])
+
+###############################################################
+
+## FIGURE 3 --- Threats by Species
+
+###############################################################
+
+# Subsetting Conservation::
+Threats_Species <- Species[Species$Variable %in% colnames(db)[8:19],]
+Threats_Species$Variable <- droplevels(Threats_Species$Variable)
+
+# Renaming variables for plot::
+levels(Threats_Species$Variable) <- Variable_rename[1:13]
+levels(Threats_Species$Score) <- Score_rename
+
+# Change order
+Threats_Species$Variable <- factor(Threats_Species$Variable, levels = Order_threats)
+Threats_Species$Species <- factor(Threats_Species$Species, levels = rev(Order_species))
+
+# Plot::
+pdf("Figures/Figure_3.pdf", width = 10, height = 11)
+
+(Figure_3 <- ggplot(data = Threats_Species, 
+                    aes(x = Species, 
+                        y = Vote, fill = Score)) +
+    facet_wrap(~Variable, nrow = 7, ncol = 2) +
+    geom_bar(col = "grey10", position = "stack", stat = "identity")+
+    coord_flip() + 
+    labs(title = "How relevant is each of the following threats\nfor the taxon you focus on?",
+         #subtitle = "1 = not relevant at all ; 5 = most relevant",
+         x = NULL, 
+         y = "Proportion of votes [predicted values]")+
+    scale_fill_brewer(palette="PuBu")+ #PRGn
+    theme_custom_region())
+
+dev.off()
+
+###############################################################
+
+## FIGURE 4 --- Conservation measures by Species
+
+###############################################################
+
+# Subsetting Conservation::
+Conserv_Species <- Species[Species$Variable %in% colnames(db)[21:26],]
+Conserv_Species$Variable <- droplevels(Conserv_Species$Variable)
+
+# Renaming variables for plot::
+levels(Conserv_Species$Variable) <- Variable_rename[14:20]
+levels(Conserv_Species$Score) <- Score_rename
+
+# Change order
+Conserv_Species$Variable <- factor(Conserv_Species$Variable, levels = Order_conserv)
+Conserv_Species$Species <- factor(Conserv_Species$Species, levels = rev(Order_species))
+
+# Plot::
+
+pdf("Figures/Figure_4.pdf", width = 10, height = 9)
+
+(Figure_4 <- ggplot(data = Conserv_Species, 
+                    aes(x = Species, 
+                        y = Vote, fill = Score)) +
+    facet_wrap(~Variable, nrow = 3, ncol = 2) +
+    geom_bar(col = "grey10",position = "stack", stat = "identity")+
+    coord_flip() + 
+    labs(title = "How relevant is each of the following conservation measure\nfor the taxon you focus on?",
+         #subtitle = "1 = not relevant at all ; 5 = most relevant",
+         x = NULL, 
+         y = "Proportion of votes [predicted values]")+
+    scale_fill_brewer(palette="BuPu")+ #PRGn
+    theme_custom_region())
+
+dev.off()
+
+
+
+###############################################################
+
+## PREDICT FOR REGION:
+
+###############################################################
+
+# Generating predictions in a loop -------------------------------
+
+# Takes about 3 minutes . . .
+for(i in 1 : length(model)) {
+  
+  # Take the i model::
+  model_i <- model[[i]]
+  
+  # Predict for each biogeographic region::
+  for(j in 1 : nlevels(model_i$data$Biogeography)) {
+    
+    pred_j  <- predict(model_i, 
+                       newdata = model_i$data[model_i$data$Biogeography == levels(model_i$data$Biogeography)[j],])
+    
+    #add missing levels if any
+    if(ncol(pred_j)<5)
+      pred_j <- cbind(rep(0,nrow(pred_j)),pred_j)
+    
+    pred_j <- data.frame(Score = as.character(1:5), 
+                         Vote  =  apply(pred_j, 2, mean), #some factors miss the first level
+                         sd    =  apply(pred_j, 2, sd), #some factors miss the first level
+                         Region = rep(levels(model_i$data$Biogeography)[j],5))
+    
+    if(j == 1)
+      pred <- pred_j
+    else
+      pred <- rbind(pred, pred_j)
+    
+  }
+  
+  #Store the final prediction::
+  pred <- data.frame(pred, Variable = rep(colnames(db)[i+7], nrow(pred)))
+  
+  if(i== 1)
+    Region <- pred
+  else
+    Region <- rbind(Region, pred)
+}
+
+# Converting as factor and sorting correctly::
+Region$Variable <- as.factor(Region$Variable)
+Region$Score    <- as.factor(Region$Score)
+Region$Region   <- as.factor(Region$Region)
+
+# Reorder factor levels::
+Region$Variable <- factor(Region$Variable, levels = colnames(db)[8:27])
+
+###############################################################
+
+## FIGURE 5 --- Threats by Region
+
+###############################################################
+
+# Subsetting Conservation::
+Threats_Region <- Region[Region$Variable %in% colnames(db)[8:19],]
+Threats_Region$Variable <- droplevels(Threats_Region$Variable)
+
+# Renaming variables for plot::
+levels(Threats_Region$Variable) <- Variable_rename[1:13]
+levels(Threats_Region$Score) <- Score_rename
+
+# Change order
+Threats_Region$Variable <- factor(Threats_Region$Variable, levels = Order_threats)
+Threats_Region$Region <- factor(Threats_Region$Region, levels = rev(Order_region))
+
+# Plot::
+pdf("Figures/Figure_5.pdf", width = 10, height = 11)
+
+(Figure_5 <- ggplot(data = Threats_Region, 
+                    aes(x = Region, 
+                        y = Vote, fill = Score)) +
+    facet_wrap(~Variable, nrow = 7, ncol = 2) +
+    geom_bar(col = "grey10", position = "stack", stat = "identity")+
+    coord_flip() + 
+    labs(title = "How relevant is each of the following threats\nin your region?",
+         #subtitle = "1 = not relevant at all ; 5 = most relevant",
+         x = NULL, 
+         y = "Proportion of votes [predicted values]")+
+    scale_fill_brewer(palette = "PuBu")+ #PRGn
+    theme_custom_region())
+
+dev.off()
+
+###############################################################
+
+## FIGURE 6 --- Conservation measures by Region
+
+###############################################################
+
+# Subsetting Conservation::
+Conserv_Region <- Region[Region$Variable %in% colnames(db)[21:26],]
+Conserv_Region$Variable <- droplevels(Conserv_Region$Variable)
+
+# Renaming variables for plot::
+levels(Conserv_Region$Variable) <- Variable_rename[14:20]
+levels(Conserv_Region$Score) <- Score_rename
+
+# Change order
+Conserv_Region$Variable <- factor(Conserv_Region$Variable, levels = Order_conserv)
+Conserv_Region$Region <- factor(Conserv_Region$Region, levels = rev(Order_region))
+
+# Plot::
+
+pdf("Figures/Figure_6.pdf", width = 10, height = 9)
+
+(Figure_6 <- ggplot(data = Conserv_Region, 
+                    aes(x = Region, 
+                        y = Vote, fill = Score)) +
+    facet_wrap(~Variable, nrow = 3, ncol = 2) +
+    geom_bar(col = "grey10",position = "stack", stat = "identity")+
+    coord_flip() + 
+    labs(title = "How relevant is each of the following conservation measure\nin your region?",
+         #subtitle = "1 = not relevant at all ; 5 = most relevant",
+         x = NULL, 
+         y = "Proportion of votes [predicted values]")+
+    scale_fill_brewer(palette="BuPu")+ #PRGn
+    theme_custom_region())
+
+dev.off()
+
+###############################################################
+
+## FIGURE S3-S21 --- model interpretation & plots
+
+###############################################################
+
+#Model summary::
+for(i in 1:length(model)){
+  message(paste0("---------- Model for: ",colnames(db)[i+7], " ----------"))
+  print(summary(model[[i]]))
+}
+
+# Plotting posteriors distributions in a loop
+plot_mcmc <- c()
+
+for(i in 1 : length(model)) {
+  
+  # Take posterios probabilities::
+  posterior_i <- as.matrix(model[[i]])
+  
+  # Rename::
+  colnames(posterior_i)[c(1:19)] <- Posteriors_rename
+  
+  # Make the plot
+  (plot_mcmc[[i]] <- bayesplot::mcmc_areas(posterior_i,
+                                          pars = Posteriors_rename, 
+                                          prob = 0.9) + theme_custom0() + ggtitle(Variable_rename[i], "Posterior distributions [medians and 90% intervals]"))
+}
+
+#save the plots
+for(i in 1 : length(plot_mcmc)) {
+  pdf(paste0("Figures/","Figure_","S",i+2,".pdf"))
+  print(plot_mcmc[[i]])
+  dev.off()
+}
+
+# End

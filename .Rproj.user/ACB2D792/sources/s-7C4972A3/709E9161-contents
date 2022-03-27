@@ -17,6 +17,7 @@ rm(list = ls())
 
 library("Amelia")
 library("dplyr")
+library("gam")
 library("ggplot2")
 library("MuMIn")
 library("parameters")
@@ -82,40 +83,47 @@ table(db$Phylogenetic_div)
 table(db$Functional_div)
 table(db$Taxonomic_div)
 
+
+# Sorting factors ---------------------------------------------------------
+
 # Data exploration -------------------------------------------------------
 
 ###### temporal trends ######
 
-table(db$Biodiversity_prop,db$Publication_year)
-
 # all
-
 range(db$Biodiversity_prop, na.rm = TRUE) ; mean(db$Biodiversity_prop, na.rm = TRUE) ; std(db$Biodiversity_prop)
 nrow(db)
 
 (plot1a <- ggplot(data = db, aes(x = Publication_year, y = Biodiversity_prop)) + 
   geom_point(col = "grey10", fill = "grey30", size = 5, shape = 21, alpha = 0.3) +
   geom_smooth(method = "lm", formula = y ~ x, col="blue", fill = "blue") +
-  labs(x = "Publication year" , y = Y.label)+
+  labs(x = NULL, y = Y.label)+
   annotate(geom="text", x=2000, y=0.35, 
-           label=expression(paste("Mean" %+-% "Standard Error: 0.03" %+-% "0.001")),
+           label=expression(paste("Average biodiversity proportion" %+-% "SE: 0.03" %+-% "0.001")),
            color="grey10", size = 5)+
-  theme_custom())
+  theme_custom()) #warnings() are due to NA removal
 
+#Split multiple regions separated by ";"
 box1 <- semi_colon_splitter(input1 = db$Geography,
                             input2 = db$Biodiversity_prop, 
                             names  = c("Geography","Biodiversity_prop"))
 
 box1$Biodiversity_prop <- as.numeric(as.character(box1$Biodiversity_prop))
 
+#Sort levels
+box1$Geography <- factor(box1$Geography,
+                         c(levels(box1$Geography)[4],levels(box1$Geography)[-4]))
+
+
 (plot1b <- ggplot(data = box1 %>% drop_na(Geography,Biodiversity_prop), 
                   aes(x = Geography, y = Biodiversity_prop)) +
     geom_flat_violin(position = position_nudge(x = 0.2, y = 0), alpha = 0.4, fill= "blue", col = "white") +
     geom_point(position = position_jitter(width = 0.15), size = 1, alpha = 0.7, color = "grey40") +
-    geom_boxplot(width = 0.2, outlier.shape = NA, alpha = 0.4) +
+    geom_boxplot(width = 0.2,  col = "blue", outlier.shape = NA, alpha = 0) +
     labs(y = Y.label, x = NULL) +
     theme_custom())
 
+#Split multiple domains separated by ";"
 box2 <- semi_colon_splitter(input1 = db$Domain,
                             input2 = db$Biodiversity_prop, 
                             names = c("Domain","Biodiversity_prop"))
@@ -126,41 +134,49 @@ box2$Biodiversity_prop <- as.numeric(as.character(box2$Biodiversity_prop))
                   aes(x = Domain, y = Biodiversity_prop)) +
     geom_flat_violin(position = position_nudge(x = 0.2, y = 0), alpha = 0.4, fill= "blue", col = "white") +
     geom_point(position = position_jitter(width = 0.15), size = 1, alpha = 0.7, color = "grey40") +
-    geom_boxplot(width = 0.2, outlier.shape = NA, alpha = 0.4) +
+    geom_boxplot(width = 0.2, col = "blue", outlier.shape = NA, alpha = 0) +
     labs(y = Y.label, x = NULL) +
     theme_custom())
 
+#Split multiple methds separated by ";"
 box3 <- semi_colon_splitter(input1 = db$Method_data_collection,
                             input2 = db$Biodiversity_prop, 
                             names = c("Method","Biodiversity_prop"))
 
 box3$Biodiversity_prop <- as.numeric(as.character(box3$Biodiversity_prop))
 
+#Sort levels
+box3$Method <- factor(box3$Method,
+                         c(levels(box3$Method)[-4],levels(box3$Method)[4]))
+
 (plot1d <- ggplot(data = box3 %>% drop_na(Method,Biodiversity_prop), 
                   aes(x = Method, y = Biodiversity_prop)) +
     geom_flat_violin(position = position_nudge(x = 0.2, y = 0), alpha = 0.4, fill= "blue", col = "white") +
     geom_point(position = position_jitter(width = 0.15), size = 1, alpha = 0.7, color = "grey40") +
-    geom_boxplot(width = 0.2, outlier.shape = NA, alpha = 0.4) +
+    geom_boxplot(width = 0.2, col = "blue", outlier.shape = NA, alpha = 0) +
     labs(y = Y.label, x = NULL) +
     theme_custom())
 
-pdf(file = "Figure/Figure_1.pdf", width = 18, height =14)
-ggpubr::ggarrange(plot1a,plot1b,plot1c,plot1d,
+pdf(file = "Figure/Figure_1.pdf", width = 19, height = 14)
+
+ggpubr::ggarrange(plot1a, plot1b, plot1c, plot1d,
                   common.legend = FALSE,
                   hjust = -5,
                   align = "hv",
                   labels = c("A", "B", "C", "D"),
-                  ncol=2, nrow=2)
-dev.off()
+                  ncol = 2, nrow = 2) #warnings() are due to NA removal
 
+dev.off()
 
 # Figure 2 ----------------------------------------------------------------
 
+#Loading silouhettes
 animal_png <- png::readPNG("Phylopics/Animal.png")
-fungi_png <- png::readPNG("Phylopics/Fungi.png")
-micro_png <- png::readPNG("Phylopics/Micro.png")
-plant_png <- png::readPNG("Phylopics/Plant.png")
+fungi_png  <- png::readPNG("Phylopics/Fungi.png")
+micro_png  <- png::readPNG("Phylopics/Micro.png")
+plant_png  <- png::readPNG("Phylopics/Plant.png")
 
+# Plotting
 (plot2a <- ggplot(data = db[db$Animals_prop>0,], aes(x = Publication_year, y = Animals_prop)) + 
     geom_point(col = "grey10", fill = "grey30", size = 5, shape = 21, alpha = 0.3) +
     geom_smooth(method = "glm", formula = y ~ x, 
@@ -170,7 +186,7 @@ plant_png <- png::readPNG("Phylopics/Plant.png")
     xlim(1992,2020)+
     ylim(0,1)+
     annotation_custom(grid::rasterGrob(animal_png), xmin = 1992, xmax = 2000, ymin = 0.75, ymax = 1)+ 
-    theme_custom())
+    theme_custom()) #warnings() are due to NA removal
 
 (plot2b <- ggplot(db[db$Plants_prop>0,], aes(x = Publication_year, y = Plants_prop)) + 
     geom_point(col = "grey10", fill = "grey30", size = 5, shape = 21, alpha = 0.3) +
@@ -181,7 +197,7 @@ plant_png <- png::readPNG("Phylopics/Plant.png")
     xlim(1992,2020)+
     ylim(0,1)+
     annotation_custom(grid::rasterGrob(plant_png), xmin = 1992, xmax = 1995, ymin = 0.75, ymax = 1)+ 
-    theme_custom())
+    theme_custom()) #warnings() are due to NA removal
 
 (plot2c <- ggplot(data = db[db$Fungi_prop>0,], aes(x = Publication_year, y = Fungi_prop)) + 
     geom_point(col = "grey10", fill = "grey30", size = 5, shape = 21, alpha = 0.3) +
@@ -192,7 +208,7 @@ plant_png <- png::readPNG("Phylopics/Plant.png")
     xlim(1992,2020)+
     ylim(0,1)+
     annotation_custom(grid::rasterGrob(fungi_png), xmin = 1992, xmax = 1997, ymin = 0.75, ymax =1)+ 
-    theme_custom())
+    theme_custom()) #warnings() are due to NA removal
 
 (plot2d <- ggplot(data = db[db$Micro_prop>0,], aes(x = Publication_year, y = Micro_prop)) + 
     geom_point(col = "grey10", fill = "grey30", size = 5, shape = 21, alpha = 0.3) +
@@ -203,7 +219,7 @@ plant_png <- png::readPNG("Phylopics/Plant.png")
     xlim(1992,2020)+
     ylim(0,1)+
     annotation_custom(grid::rasterGrob(micro_png), xmin = 1992, xmax = 1997, ymin = 0.75, ymax = 1)+
-    theme_custom())
+    theme_custom()) #warnings() are due to NA removal
 
 pdf(file = "Figure/Figure_2.pdf", width = 16, height =12)
 ggpubr::ggarrange(plot2a,plot2b,plot2c,plot2d,
@@ -211,7 +227,7 @@ ggpubr::ggarrange(plot2a,plot2b,plot2c,plot2d,
                   hjust = -5,
                   align = "hv",
                   labels = c("A", "B", "C", "D"),
-                  ncol=2, nrow=2)
+                  ncol=2, nrow=2) #warnings() are due to NA removal
 dev.off()
 
 # Figure 3 ----------------------------------------------------------------
@@ -263,29 +279,96 @@ db_glm <- db_glm %>% mutate_at(vars("Method","Geography","Domain",
 
 rm(method_split,method,geography,geography_split,domain,domain_split) #clean
 
-# Correcting citation by year (NOTE:: to do better with gam)
-db_glm$cit <- db_glm$cit / db_glm$year
+# Data exploration --------------------------------------------------------
+
+# Checking balancing of factors
+table(db_glm$Method) #Citizen science/simulation too few records
+levels(db_glm$Method)[c(6,7)] <- "Other"
+
+table(db_glm$Geography) #Antartica a bit unbalanced
+
+table(db_glm$Domain) #OK
+db_glm <- droplevels(db_glm)
+
+# Correcting citation by year
+
+## What is the trend of citation over time?
+ggplot(data = db_glm, aes(x = year, y = cit)) + 
+  geom_point(size = 1, alpha = 0.7, color = "grey40")+
+  labs(x = "year of publication", y = "citation")+
+  theme_custom()
+
+## Correcting citation by article age
+M0 <- gam::gam(cit ~ s(year), family = poisson, data = db_glm) #constraining dof to 2 so that you don't get negative predicted citations
+summary(M0)
+plot(M0, se = TRUE)
+
+## Taking the residual of citations
+db_glm <- data.frame(db_glm, citation_residuals = resid(M0,type="pearson"))
+
+#Checking how good it predict by comparing with a simple normalization by year of publication
+
+ggplot(data = db_glm, aes(x = citation_residuals, 
+                          y = cit/year)) + #normalize by year
+         geom_point(size = 1, alpha = 0.7, color = "grey40")+
+         labs(x = "citation residuals", y = "citation normalized")+
+         theme_custom()
 
 # Dependent var
 db_glm$prop  <- rowSums(db[,36:91])
 db_glm$total <- length(36:91)
 
+# Checking outliers
+par(mar= c(rep(2,4)))
+dotchart(db_glm$citation_residuals) # 1 outlier
+dotchart(db_glm$prop) #2 outliers
+
+# Removing outliers
+db_glm <- db_glm[db_glm$citation_residuals < 200,]
+db_glm <- db_glm[db_glm$prop < 20,]
+
 #Set baseline
 db_glm <- within(db_glm, Geography <- relevel(Geography, ref = "Global"))
-db_glm <- within(db_glm, Domain    <- relevel(Domain, ref = "Multiple"))
-db_glm <- within(db_glm, Method    <- relevel(Method, ref = "Multiple"))
+db_glm <- within(db_glm, Domain    <- relevel(Domain,    ref = "Multiple"))
+db_glm <- within(db_glm, Method    <- relevel(Method,    ref = "Multiple"))
 
-#Model
-m1  <- glm(cbind(prop,total) ~ year + 
-             cit + 
+# Modelling  --------------------------------------------------------------
+
+#scale contionuos variables
+db_glm$year <- scale(db_glm$year)
+db_glm$citation_residuals <- scale(db_glm$citation_residuals)
+
+#Initial model
+m1  <- glm(cbind(prop,total) ~ 
+             year + 
+             citation_residuals + 
              Domain + 
              Geography + 
              Method +
              Title_geo + 
              Title_hab + 
-             Title_taxon, data = db_glm, family = "binomial")
+             Title_taxon, 
+           data = db_glm, family = "binomial")
 
-summary(m1)
+parameters(m1)
+performance::check_overdispersion(m1) #overdispersed
+performance::check_collinearity(m1)
+
+#Refit with quasibinomial due to overdispersion 
+m1  <- glm(cbind(prop,total) ~ 
+             year + 
+             citation_residuals + 
+             Domain + 
+             Geography + 
+             Method +
+             Title_geo + 
+             Title_hab + 
+             Title_taxon, 
+           data = db_glm, family = "quasibinomial")
+
+parameters(m1)
+performance::check_collinearity(m1)
+performance::check_model(m1)
 
 # posthoc
 pairs(emmeans::emmeans(m1, ~ Domain), simple="Domain")
@@ -297,7 +380,9 @@ pairs(emmeans::emmeans(m1, ~ Method), simple="Method")
 #                    show.values = TRUE, value.offset = .3, se = TRUE, show.p = TRUE) + theme_classic()
 # 
 
-# Plot
+# Plot...
+
+# Estract estimates
 Estimates_m1 <- 
   m1 %>% 
   summary %>% 
@@ -306,54 +391,99 @@ Estimates_m1 <-
   dplyr::filter(!row_number() %in% 1) %>%  #remove intercept
   dplyr::rename(SE = 3, z = 4, p = 5) #rename
 
-Estimates_m1$Variable <- c("Year of publication",
-                           "Citations (normalized by year)",
-                           "Domain [Terrestrial]",
-                           "Domain [Saltwater]",
-                           "Domain [Freshwater]",
-                           "Geographic [Palearctic]",
-                           "Geographic [Afrotropical]",
-                           "Geographic [Indomalayan]",
-                           "Geographic [Neartic]",
-                           "Geographic [Australasian]",
-                           "Geographic [Antartic]",
-                           "Geographic [Neotropical]",
-                           "Method [Review/Opinion]",
-                           "Method [Field sampling]",
-                           "Method [Big data]",
-                           "Method [Other]",
-                           "Method [Citizen science]",
-                           "Method [Simulation]",
-                           "Mention of location - title",
-                           "Mention of habitat - title",
-                           "Mention of taxon/a - title")
+#Set variable order and rename
+order_var <- c("Year of publication",
+               "Citations (corrected by year)",
+               "Domain [Terrestrial]",
+               "Domain [Saltwater]",
+               "Domain [Freshwater]",
+               "Geographic [Palearctic]",
+               "Geographic [Afrotropical]",
+               "Geographic [Indomalayan]",
+               "Geographic [Neartic]",
+               "Geographic [Australasian]",
+               "Geographic [Antartic]",
+               "Geographic [Neotropical]",
+               "Method [Review/Opinion]",
+               "Method [Field sampling]",
+               "Method [Big data]",
+               "Method [Other]",
+               "Mention of location - title",
+               "Mention of habitat - title",
+               "Mention of taxon/a - title")
 
-MIN <- range(Estimates_m1$Estimate)[1]
-MAX <- range(Estimates_m1$Estimate)[2]
+Estimates_m1$Variable <- order_var #Rename
 
-col_p <- ifelse(Estimates_m1$p > 0.05, "grey5", ifelse(Estimates_m1$Estimate>0,"orange","blue") )
+Estimates_m1$Variable <- factor(Estimates_m1$Variable, rev(order_var)) #sort
 
-#Add rectangle??
+# col_p <- ifelse(Estimates_m1$p > 0.05, "grey5", ifelse(Estimates_m1$Estimate>0,"orange","blue") )
+# 
+# (plot_model3 <- ggplot2::ggplot(data = Estimates_m1, aes(Variable, Estimate)) +
+#     
+#     #geom_tile(geom = 'rect',xmin=1, xmax=2, ymin=MIN, ymax=MAX, color="grey10", alpha=0.8) +
+#   
+#     # geom_rect(aes(xmin = MIN, xmax = MAX, ymin=1.2, ymax=2.3), 
+#     #           fill = "grey70", alpha = 0.7) +
+#     # 
+#     #geom_vline(lty = 3, size = 0.7, col = "grey50", xintercept = 1) +
+#     
+#     # annotate(
+#     #   "rect",
+#     #   xmin = 1.5,
+#     #   xmax = 4.5,
+#     #   ymin = 4,
+#     #   ymax = 7,
+#     #   alpha = .5
+#     # ) +
+#     
+#     geom_hline(lty = 3, size = 0.7, col = "grey50", yintercept = 0.1) +
+#     geom_errorbar(aes(ymin = Estimate-SE, ymax = Estimate+SE), width = 0, col = col_p) +
+#     geom_text(aes(Variable, Estimate), 
+#               label = round(Estimates_m1$Estimate,2), 
+#               vjust = -1, size = 3, col = col_p) +
+#     geom_point(size = 2, pch = 21, col = col_p, fill = col_p) +
+#     labs(y = expression(paste("Odds ratio" %+-% "Standard Error")),
+#          x = NULL)+
+#     theme_custom() + coord_flip())
 
-(plot_model3 <- ggplot2::ggplot(data = Estimates_m1, aes(Variable, Estimate)) +
+
+sign <- ifelse(Estimates_m1$p > 0.05, "", " *")
+
+col_p <- c("grey10",
+           "blue",
+           rep("grey10", nlevels(db_glm$Domain)-1),
+           rep("blue", nlevels(db_glm$Geography)-1),
+           rep("grey10",  nlevels(db_glm$Method)-1),
+           rep("blue",3))
+
+col_p <- "grey10"
+
+(plot_model3 <- ggplot2::ggplot(data = Estimates_m1) +
+
+    geom_pointrange(aes(x = Variable, 
+                        y = Estimate,
+                        ymin = Estimate-SE, 
+                        ymax = Estimate+SE), col = col_p, size = 0.5) + 
     
-    #geom_tile(geom = 'rect',xmin=1, xmax=2, ymin=MIN, ymax=MAX, color="grey10", alpha=0.8) +
-  
     geom_hline(lty = 3, size = 0.7, col = "grey50", yintercept = 0) +
-    geom_errorbar(aes(ymin = Estimate-SE, ymax = Estimate+SE), width = 0, col = col_p) +
-    geom_text(aes(Variable, Estimate), 
-              label = round(Estimates_m1$Estimate,2), 
+    
+    geom_text(aes(Variable, Estimate),
+              label = paste0(round(Estimates_m1$Estimate,2),sign), 
               vjust = -1, size = 3, col = col_p) +
-    geom_point(size = 2, pch = 21, col = col_p, fill = col_p) +
+   
     labs(y = expression(paste("Odds ratio" %+-% "Standard Error")),
          x = NULL)+
-    theme_custom() + coord_flip())
-
+    theme_custom() + theme(axis.text.y  = element_text(colour = rev(col_p))) + coord_flip()
+    # geom_vline(lty = 1, size = 0.2, col = "blue", xintercept = 3.5)+
+    # geom_vline(lty = 1, size = 0.2, col = "blue", xintercept = 7.5)+
+    # geom_vline(lty = 1, size = 0.2, col = "blue", xintercept = 14.5)+
+    # geom_vline(lty = 1, size = 0.2, col = "blue", xintercept = 17.5)+
+    # geom_vline(lty = 1, size = 0.2, col = "blue", xintercept = 18.5)
+)
 
 pdf(file = "Figure/Figure_3.pdf", width = 12, height =8)
 plot_model3
 dev.off()
-
 
 # Figure 4 ----------------------------------------------------------------
 
@@ -398,7 +528,6 @@ db2$Phyla <- factor(db2$Phyla,levels = db2$Phyla)
     theme_custom() + theme(axis.text.x = element_text(angle = 70, hjust=1 ))
 )
 
-
 pdf(file = "Figure/Figure_4.pdf", width = 12, height =8)
 figure_4
 dev.off()
@@ -430,8 +559,8 @@ Title[3:300,] %>% with(wordcloud(words = title_word,
                                  scale=c(4,.2),
                                  random.color=TRUE, color = c("orange","aquamarine3","aquamarine4","darkblue","black")))
 
-#### APPUNTI:::
 
+#### APPUNTI:::
 
 # Adjectives --------------------------------------------------------------
 

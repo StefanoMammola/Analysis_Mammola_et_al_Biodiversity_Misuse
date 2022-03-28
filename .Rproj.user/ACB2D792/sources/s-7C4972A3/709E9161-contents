@@ -61,6 +61,7 @@ db$Micro_prop        <- rowSums(db[,c(85:88)])    / length(c(85:88))
 
 colnames(db)
 
+4/56
 #Title fanciness
 db$Title_fanciness <- rowSums(db[,c(23,24)])
 table(db$Title_fanciness) #too few obs
@@ -148,6 +149,9 @@ box3$Biodiversity_prop <- as.numeric(as.character(box3$Biodiversity_prop))
 #Sort levels
 box3$Method <- factor(box3$Method,
                          c(levels(box3$Method)[-4],levels(box3$Method)[4]))
+
+
+levels(box3$Method)[c(2,5)] <- "Other"
 
 (plot1d <- ggplot(data = box3 %>% drop_na(Method,Biodiversity_prop), 
                   aes(x = Method, y = Biodiversity_prop)) +
@@ -301,6 +305,8 @@ ggplot(data = db_glm, aes(x = year, y = cit)) +
 ## Correcting citation by article age
 M0 <- gam::gam(cit ~ s(year), family = poisson, data = db_glm) #constraining dof to 2 so that you don't get negative predicted citations
 summary(M0)
+
+par(mar= c(rep(2,4)))
 plot(M0, se = TRUE)
 
 ## Taking the residual of citations
@@ -415,8 +421,6 @@ order_var <- c("Year of publication",
 Estimates_m1$Variable <- order_var #Rename
 
 Estimates_m1$Variable <- factor(Estimates_m1$Variable, rev(order_var)) #sort
-
-# col_p <- ifelse(Estimates_m1$p > 0.05, "grey5", ifelse(Estimates_m1$Estimate>0,"orange","blue") )
 # 
 # (plot_model3 <- ggplot2::ggplot(data = Estimates_m1, aes(Variable, Estimate)) +
 #     
@@ -449,14 +453,14 @@ Estimates_m1$Variable <- factor(Estimates_m1$Variable, rev(order_var)) #sort
 
 sign <- ifelse(Estimates_m1$p > 0.05, "", " *")
 
-col_p <- c("grey10",
-           "blue",
-           rep("grey10", nlevels(db_glm$Domain)-1),
-           rep("blue", nlevels(db_glm$Geography)-1),
-           rep("grey10",  nlevels(db_glm$Method)-1),
-           rep("blue",3))
+# col_p <- c("grey10",
+#            "blue",
+#            rep("grey10", nlevels(db_glm$Domain)-1),
+#            rep("blue", nlevels(db_glm$Geography)-1),
+#            rep("grey10",  nlevels(db_glm$Method)-1),
+#            rep("blue",3))
 
-col_p <- "grey10"
+col_p <- ifelse(Estimates_m1$p > 0.05, "grey5", ifelse(Estimates_m1$Estimate>0,"orange","blue") )
 
 (plot_model3 <- ggplot2::ggplot(data = Estimates_m1) +
 
@@ -532,9 +536,86 @@ pdf(file = "Figure/Figure_4.pdf", width = 12, height =8)
 figure_4
 dev.off()
 
+# Map ---------------------------------------------------------------------
+
+# Loading data
+world <- map_data("world")
+biog_regions <- raster::shapefile("Shapefiles/biogeographic_regions.shp")
+
+(map1 <- ggplot() +
+  geom_map(map = world, data = world,
+           aes(map_id = region), 
+           color = "gray10", fill = "gray10", size = 0.3) +
+  
+  labs(title = NULL) +
+  
+  #Add bioregion
+  geom_path(data = fortify(biog_regions),
+            aes(x = long, y = lat, group = group),
+            color = 'blue', size = .2) +
+  # 
+  # #Antartica
+  # annotate(geom="text", x=120, y=-80, label="Antartic",
+  #          color="grey10")+
+  # 
+  # #Antartica
+  # annotate(geom="text", x=50, y=-60, label="Antartic",
+  #          color="blue")+
+  # 
+  # #Palearctic
+  # annotate(geom="text", x=24, y=94, label="Palearctic",
+  #          color="blue")+
+  # 
+  # #Nearctic
+  # annotate(geom="text", x=-118, y=94, label="Nearctic",
+  #          color="blue")+
+  # 
+  # #Neotropical
+  # annotate(geom="text", x=-105, y=-28, label="Neotropical",
+  #          color="blue")+
+  # 
+  # #Afrotropical
+  # annotate(geom="text", x=-13, y=-3, label="Afrotropical",
+  #          color="blue")+
+  # 
+  # #Indomalaysian
+  # annotate(geom="text", x=86, y=-12, label="Indomalaysian",
+  #          color="blue")+
+  # 
+  # #Australasian
+  # annotate(geom="text", x=189, y=-19, label="Oceanian",
+  #          color="blue")+
+  
+  theme_bw() +
+  theme(
+    axis.text.x  = element_blank(), 
+    axis.text.y  = element_blank(),
+    axis.title.y = element_blank(),
+    axis.title.x = element_blank(), 
+    axis.line.x = element_blank(), 
+    axis.line.y = element_blank(),
+    panel.border = element_blank(),
+    panel.grid.major.x = element_blank(),                                          
+    panel.grid.minor.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.major.y = element_blank(), 
+    axis.ticks = element_blank(),
+    plot.margin = unit(c(1,1,1,1), 'cm'),
+    plot.title = element_text(size = 18, vjust = 1, hjust = 0),
+    legend.text = element_text(size = 12),          
+    legend.title = element_blank(),                              
+    legend.position = c(0.1, 0.2), 
+    legend.key = element_blank(),
+    legend.background = element_rect(color = "black", 
+                                     fill = "white", 
+                                     size = 2, linetype = "blank")))
+
+map1
+
+
 # Wordcloud ---------------------------------------------------------------
 
-db_full <- read.csv(file = "Data/Biodiversity_WOS_V2.csv",sep='\t', dec='.',header=TRUE,as.is=FALSE)
+db_full <- read.csv(file = "Data/Biodiversity_WOS_V1.csv",sep='\t', dec='.',header=TRUE,as.is=FALSE)
 
 db_full$title <- as.character(db_full$title)
 
@@ -1004,3 +1085,8 @@ Title[3:300,] %>% with(wordcloud(words = title_word,
                                          random.color=TRUE, color = c("orange","aquamarine3","aquamarine4","darkblue","black")))
 
 #end
+
+
+
+
+

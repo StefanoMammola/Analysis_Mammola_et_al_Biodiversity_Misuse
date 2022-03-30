@@ -59,9 +59,7 @@ db$Plants_prop       <- rowSums(db[,c(71:75,90)]) / length(c(71:75,90))
 db$Fungi_prop        <- rowSums(db[,c(76:84,91)]) / length(c(76:84,91))
 db$Micro_prop        <- rowSums(db[,c(85:88)])    / length(c(85:88))
 
-colnames(db)
 
-4/56
 #Title fanciness
 db$Title_fanciness <- rowSums(db[,c(23,24)])
 table(db$Title_fanciness) #too few obs
@@ -114,7 +112,6 @@ box1$Biodiversity_prop <- as.numeric(as.character(box1$Biodiversity_prop))
 #Sort levels
 box1$Geography <- factor(box1$Geography,
                          c(levels(box1$Geography)[4],levels(box1$Geography)[-4]))
-
 
 (plot1b <- ggplot(data = box1 %>% drop_na(Geography,Biodiversity_prop), 
                   aes(x = Geography, y = Biodiversity_prop)) +
@@ -361,25 +358,24 @@ performance::check_overdispersion(m1) #overdispersed
 performance::check_collinearity(m1)
 
 #Refit with quasibinomial due to overdispersion 
-m1  <- glm(cbind(prop,total) ~ 
-             year + 
-             citation_residuals + 
-             Domain + 
-             Geography + 
-             Method +
-             Title_geo + 
-             Title_hab + 
-             Title_taxon, 
-           data = db_glm, family = "quasibinomial")
+m1b  <- glm(cbind(prop,total) ~ 
+              year + 
+              citation_residuals + 
+              Domain + 
+              Geography + 
+              Method +
+              Title_geo + 
+              Title_hab + 
+              Title_taxon, 
+            data = db_glm, family = "quasibinomial")
 
-parameters(m1)
-performance::check_collinearity(m1)
-performance::check_model(m1)
+parameters(m1b)
+performance::check_collinearity(m1b)
 
 # posthoc
-pairs(emmeans::emmeans(m1, ~ Domain), simple="Domain")
-pairs(emmeans::emmeans(m1, ~ Geography), simple="Geography")
-pairs(emmeans::emmeans(m1, ~ Method), simple="Method")
+pairs(emmeans::emmeans(m1b, ~ Domain), simple=c("Domain"))
+pairs(emmeans::emmeans(m1b, ~ Geography), simple="Geography")
+pairs(emmeans::emmeans(m1b, ~ Method), simple="Method")
 
 # sjPlot::plot_model(m1, title ="Factors correlating with biodiversity proportion",
 #                    sort.est = FALSE,  vline.color = "grey80",
@@ -390,7 +386,7 @@ pairs(emmeans::emmeans(m1, ~ Method), simple="Method")
 
 # Estract estimates
 Estimates_m1 <- 
-  m1 %>% 
+  m1b %>% 
   summary %>% 
   magrittr::extract2("coefficients") %>% # extract estimates
   as.data.frame %>% rownames_to_column("Variable") %>% 
@@ -414,52 +410,14 @@ order_var <- c("Year of publication",
                "Method [Field sampling]",
                "Method [Big data]",
                "Method [Other]",
-               "Mention of location - title",
-               "Mention of habitat - title",
-               "Mention of taxon/a - title")
+               "Mention of location in title",
+               "Mention of habitat in title",
+               "Mention of taxon/a in title")
 
 Estimates_m1$Variable <- order_var #Rename
-
 Estimates_m1$Variable <- factor(Estimates_m1$Variable, rev(order_var)) #sort
-# 
-# (plot_model3 <- ggplot2::ggplot(data = Estimates_m1, aes(Variable, Estimate)) +
-#     
-#     #geom_tile(geom = 'rect',xmin=1, xmax=2, ymin=MIN, ymax=MAX, color="grey10", alpha=0.8) +
-#   
-#     # geom_rect(aes(xmin = MIN, xmax = MAX, ymin=1.2, ymax=2.3), 
-#     #           fill = "grey70", alpha = 0.7) +
-#     # 
-#     #geom_vline(lty = 3, size = 0.7, col = "grey50", xintercept = 1) +
-#     
-#     # annotate(
-#     #   "rect",
-#     #   xmin = 1.5,
-#     #   xmax = 4.5,
-#     #   ymin = 4,
-#     #   ymax = 7,
-#     #   alpha = .5
-#     # ) +
-#     
-#     geom_hline(lty = 3, size = 0.7, col = "grey50", yintercept = 0.1) +
-#     geom_errorbar(aes(ymin = Estimate-SE, ymax = Estimate+SE), width = 0, col = col_p) +
-#     geom_text(aes(Variable, Estimate), 
-#               label = round(Estimates_m1$Estimate,2), 
-#               vjust = -1, size = 3, col = col_p) +
-#     geom_point(size = 2, pch = 21, col = col_p, fill = col_p) +
-#     labs(y = expression(paste("Odds ratio" %+-% "Standard Error")),
-#          x = NULL)+
-#     theme_custom() + coord_flip())
-
 
 sign <- ifelse(Estimates_m1$p > 0.05, "", " *")
-
-# col_p <- c("grey10",
-#            "blue",
-#            rep("grey10", nlevels(db_glm$Domain)-1),
-#            rep("blue", nlevels(db_glm$Geography)-1),
-#            rep("grey10",  nlevels(db_glm$Method)-1),
-#            rep("blue",3))
-
 col_p <- ifelse(Estimates_m1$p > 0.05, "grey5", ifelse(Estimates_m1$Estimate>0,"orange","blue") )
 
 (plot_model3 <- ggplot2::ggplot(data = Estimates_m1) +
@@ -487,6 +445,115 @@ col_p <- ifelse(Estimates_m1$p > 0.05, "grey5", ifelse(Estimates_m1$Estimate>0,"
 
 pdf(file = "Figure/Figure_3.pdf", width = 12, height =8)
 plot_model3
+dev.off()
+
+
+# Modelling #2  ------------------------------------------------------------
+
+# Repeating the analysis only with generic titles
+
+db_glm2 <- db_glm[db_glm$Title_taxon == 0,]
+db_glm2 <- db_glm2[db_glm2$Title_hab == 0,]
+db_glm2 <- db_glm2[db_glm2$Title_geo == 0,]
+db_glm2 <- db_glm2[db_glm2$Geography != "Antarctic",] ; db_glm2$Geography <- droplevels(db_glm2$Geography)
+
+#Balance of factors
+table(db_glm2$Method)
+table(db_glm2$Geography)
+table(db_glm2$Domain) 
+
+#Initial model
+m2  <- glm(cbind(prop,total) ~ 
+             year + 
+             citation_residuals + 
+             Domain + 
+             Geography + 
+             Method, 
+           data = db_glm2, family = "binomial")
+
+performance::check_overdispersion(m2) #overdispersed
+
+#Refit with quasibinomial due to overdispersion 
+m2b  <- glm(cbind(prop,total) ~ 
+              year + 
+              citation_residuals + 
+              Domain + 
+              Geography + 
+              Method, 
+           data = db_glm2, family = "quasibinomial")
+
+parameters(m2b)
+performance::check_collinearity(m2b)
+
+# posthoc
+pairs(emmeans::emmeans(m2b, ~ Domain), simple=c("Domain"))
+pairs(emmeans::emmeans(m2b, ~ Geography), simple="Geography")
+pairs(emmeans::emmeans(m2b, ~ Method), simple="Method")
+
+# sjPlot::plot_model(m1, title ="Factors correlating with biodiversity proportion",
+#                    sort.est = FALSE,  vline.color = "grey80",
+#                    show.values = TRUE, value.offset = .3, se = TRUE, show.p = TRUE) + theme_classic()
+# 
+
+# Plot...
+
+# Estract estimates
+Estimates_m2 <- 
+  m2b %>% 
+  summary %>% 
+  magrittr::extract2("coefficients") %>% # extract estimates
+  as.data.frame %>% rownames_to_column("Variable") %>% 
+  dplyr::filter(!row_number() %in% 1) %>%  #remove intercept
+  dplyr::rename(SE = 3, z = 4, p = 5) #rename
+
+#Set variable order and rename
+order_var <- c("Year of publication",
+               "Citations (corrected by year)",
+               "Domain [Terrestrial]",
+               "Domain [Saltwater]",
+               "Domain [Freshwater]",
+               "Geographic [Palearctic]",
+               "Geographic [Afrotropical]",
+               "Geographic [Indomalayan]",
+               "Geographic [Neartic]",
+               "Geographic [Australasian]",
+               "Geographic [Neotropical]",
+               "Method [Review/Opinion]",
+               "Method [Field sampling]",
+               "Method [Big data]",
+               "Method [Other]")
+
+Estimates_m2$Variable <- order_var #Rename
+Estimates_m2$Variable <- factor(Estimates_m2$Variable, rev(order_var)) #sort
+
+sign <- ifelse(Estimates_m2$p > 0.05, "", " *")
+col_p <- ifelse(Estimates_m2$p > 0.05, "grey5", ifelse(Estimates_m2$Estimate>0,"orange","blue") )
+
+(plot_model3bis <- ggplot2::ggplot(data = Estimates_m2) +
+    
+    geom_pointrange(aes(x = Variable, 
+                        y = Estimate,
+                        ymin = Estimate-SE, 
+                        ymax = Estimate+SE), col = col_p, size = 0.5) + 
+    
+    geom_hline(lty = 3, size = 0.7, col = "grey50", yintercept = 0) +
+    
+    geom_text(aes(Variable, Estimate),
+              label = paste0(round(Estimates_m2$Estimate,2),sign), 
+              vjust = -1, size = 3, col = col_p) +
+    
+    labs(y = expression(paste("Odds ratio" %+-% "Standard Error")),
+         x = NULL)+
+    theme_custom() + theme(axis.text.y  = element_text(colour = rev(col_p))) + coord_flip()
+  # geom_vline(lty = 1, size = 0.2, col = "blue", xintercept = 3.5)+
+  # geom_vline(lty = 1, size = 0.2, col = "blue", xintercept = 7.5)+
+  # geom_vline(lty = 1, size = 0.2, col = "blue", xintercept = 14.5)+
+  # geom_vline(lty = 1, size = 0.2, col = "blue", xintercept = 17.5)+
+  # geom_vline(lty = 1, size = 0.2, col = "blue", xintercept = 18.5)
+)
+
+pdf(file = "Figure/Figure_3bis.pdf", width = 12, height =8)
+plot_model3bis
 dev.off()
 
 # Figure 4 ----------------------------------------------------------------
@@ -534,6 +601,55 @@ db2$Phyla <- factor(db2$Phyla,levels = db2$Phyla)
 
 pdf(file = "Figure/Figure_4.pdf", width = 12, height =8)
 figure_4
+dev.off()
+
+## Only with titles containong no moderators
+
+db_no_moderators <- db[c(db$Title_taxon | db$Title_hab | db$Title_geo) != 1,]
+
+vector <- sort(apply(db_no_moderators[,36:86],2, sum, na.rm = TRUE), decreasing = TRUE)
+
+db2 <- data.frame(Phyla = names(vector), N = vector)
+
+Taxa_to_rename <- ifelse(db2$N<2,db2$N,NA)
+N_to_rename    <- sum(Taxa_to_rename,na.rm=TRUE)
+Taxa_to_rename <- length(na.omit(Taxa_to_rename))
+
+db2 <- db2[ 1 : (nrow(db2)-Taxa_to_rename), ]
+
+db2 <- rbind(db2, data.frame(Phyla = paste0("Others (n = ",Taxa_to_rename,")"), N = N_to_rename))
+
+db2 <- cbind(db2, Type = c(rep("Animal",2),
+                           "Plant",
+                           rep("Animal",2),
+                           "Plant",
+                           "Microorganism",
+                           "Plant",
+                           rep("Animal",3),
+                           "Plant",
+                           "Animal",
+                           "Plant",
+                           "Animal",
+                           "Fungi",
+                           "Microorganism",
+                           rep("Animal",2),
+                           "Fungi",
+                           "Multiple"
+))
+
+db2$Phyla <- factor(db2$Phyla,levels = db2$Phyla)
+
+(figure_4bis <- ggplot(db2, aes(x= Phyla, y=N))+
+    geom_bar(stat="identity", alpha=1, colour = "black")  +
+    
+    labs(x = NULL, y = "Count")+
+    
+    scale_fill_manual(values = rev(RColorBrewer::brewer.pal(5, "Blues")))+
+    theme_custom() + theme(axis.text.x = element_text(angle = 70, hjust=1 ))
+)
+
+pdf(file = "Figure/Figure_4.pdf", width = 12, height =8)
+figure_4bis
 dev.off()
 
 # Map ---------------------------------------------------------------------

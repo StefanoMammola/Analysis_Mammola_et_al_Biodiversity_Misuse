@@ -11,7 +11,7 @@
 
 # Plot parameters ---------------------------------------------------------
 
-Y.label <- "Proportion of biodiversity [Phyla/Divisions]"
+Y.label <- "Sampled proportion of biodiversity"
 
 COL <- c("blue", "palevioletred4", "seagreen4", "orange", "black", "red", "turquoise", "purple")
 

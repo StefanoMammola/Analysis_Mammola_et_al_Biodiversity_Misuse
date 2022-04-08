@@ -79,6 +79,22 @@ table(db$Facets_biodiversity)
 # Missing data 
 Amelia::missmap(db)
 
+# Chcking N° of coutnris in the reference list
+
+db$author_country <- as.character(db$author_country)
+
+country_diversity <- c()
+
+for(i in 1:nrow(db)){
+  
+  diversity_i <- strsplit(db[i,]$author_country, split = ";")[[1]]
+  diversity_i <- trimws(diversity_i, which = c("both"))
+  diversity_i <- unique(diversity_i)
+  
+  country_diversity <- append(country_diversity, length(diversity_i))}
+
+db <- cbind(db,country_diversity) 
+
 ###########################
 # Data preparation part 2 #
 ###########################
@@ -366,7 +382,8 @@ db_glm <- db2 %>% select(year = Publication_year,
                         Title_adjecties,
                         Biodiversity_prop,
                         Geography,
-                        Domain)
+                        Domain,
+                        country_diversity)
 
 # Checking balancing of factors
 table(db_glm$Method) #Citizen science/simulation too few records
@@ -391,8 +408,7 @@ db_glm <- db_glm[db_glm$citation_residuals < 200,]
 db_glm <- db_glm[db_glm$prop < 20,]
 
 # Scale continuous variables
-db_glm$year <- scale(db_glm$year)
-db_glm$citation_residuals <- scale(db_glm$citation_residuals)
+db_glm <- db_glm %>% mutate_at(vars(year,citation_residuals,country_diversity),scale)
 
 # Modelling  --------------------------------------------------------------
 
@@ -401,7 +417,7 @@ model_1 <- as.formula("prop ~
                       year + 
                       Domain + Geography + Method +
                       Phylogenetic_div + Functional_div + Other_div +
-                      Title_geo + Title_hab + Title_taxon")
+                      Title_geo + Title_hab + Title_taxon + country_diversity")
 
 #Initial model
 m1  <- glm(model_1, data = db_glm, family = "poisson")
@@ -449,7 +465,8 @@ order_var1 <- c("Year of publication",
                "Other diversity [yes]",
                "Mention of location in title [yes]",
                "Mention of habitat in title [yes]",
-               "Mention of taxon/a in title [yes]")
+               "Mention of taxon/a in title [yes]",
+               "Number of coauthors' countries")
 
 Estimates_m1$Variable <- order_var1 #Rename
 Estimates_m1$Variable <- factor(Estimates_m1$Variable, rev(order_var1)) #Sort
@@ -474,7 +491,9 @@ plot_model1 <- ggplot2::ggplot(data = Estimates_m1) +
     labs(title = paste0("Articles with biodiversity proportion > 0 [N = ",nrow(db_glm),"]"),
          y = expression(paste("Odds ratio" %+-% "Standard Error")),
          x = NULL)+
-    theme_custom() + theme(axis.text.y  = element_text(colour = rev(col_p))) + coord_flip()
+    theme_custom() + theme(axis.text.y  = element_text(colour = rev(col_p))) + coord_flip()+
+  annotate(geom = 'text', x = 2, y = -0.9, size =5,
+           label = paste0("R^2 ==",round(as.numeric(performance::r2(m1b)[1]),2)), parse = TRUE)
 
 # Clean
 rm(m1, m1b, sign, order_var1, model_1, col_p)
@@ -495,7 +514,8 @@ db_glm2 <- db2 %>% drop_na(Title_adjecties) %>%
            Other_div,
            Biodiversity_prop,
            Geography,
-           Domain) 
+           Domain,
+           country_diversity) 
 
 db_glm2 <- na.omit(db_glm2)
 
@@ -535,9 +555,8 @@ db_glm2$total <- length(36:91)
 # Removing outliers
 db_glm2 <- db_glm2 %>% filter(prop < 11)
 
-#scale continuos variables
-db_glm2$year <- scale(db_glm2$year)
-db_glm2$citation_residuals <- scale(db_glm2$citation_residuals)
+# Scale continuous variables
+db_glm2 <- db_glm2 %>% mutate_at(vars(year,citation_residuals,country_diversity),scale)
 
 # Modelling  --------------------------------------------------------------
 
@@ -549,7 +568,8 @@ model_2 <- as.formula("prop ~
                       Method +
                       Phylogenetic_div + 
                       Functional_div +
-                      Other_div")
+                      Other_div +
+                      country_diversity")
 
 # Initial model
 m2  <- glm(model_2, data = db_glm2, family = "poisson")
@@ -588,8 +608,8 @@ order_var2 <- c("Year of publication",
                 "Method [Other]",
                 "Phylogenetic diversity [yes]",
                 "Functional diversity [yes]",
-                "Other diversity [yes]"
-                )
+                "Other diversity [yes]",
+                "Number of coauthors' countries")
 
 Estimates_m2$Variable <- order_var2 #Rename
 Estimates_m2$Variable <- factor(Estimates_m2$Variable, rev(order_var2)) #sort
@@ -613,7 +633,10 @@ plot_model2 <- ggplot2::ggplot(data = Estimates_m2) +
     labs(title = paste0("Articles with no moderators in the title [N = ",nrow(db_glm2),"]"),
          y = expression(paste("Odds ratio" %+-% "Standard Error")),
          x = NULL)+
-    theme_custom() + theme(axis.text.y  = element_text(colour = rev(col_p))) + coord_flip()
+    theme_custom() + theme(axis.text.y  = element_text(colour = rev(col_p))) + coord_flip()+
+  annotate(geom = 'text', x = 1.2, y = -0.7, size =5,
+           label = paste0("R^2 ==",round(as.numeric(performance::r2(m2)[1]),2)), parse = TRUE)
+
 
 rm(m2, sign, order_var2, model_2, col_p)
 
@@ -708,7 +731,7 @@ barchart2 <- ggplot(bar2, aes(x = Phyla, y = N))+
              hjust = 0)
 
 # Save
-pdf(file = "Figure/Figure_3.pdf", width = 15, height = 15.5)
+pdf(file = "Figure/Figure_3.pdf", width = 15, height = 16)
 
 ggpubr::ggarrange(plot_model1,barchart1,plot_model2,barchart2,
                   common.legend = FALSE,
@@ -723,6 +746,8 @@ rm(Taxa_to_rename, N_to_rename, vector, col_bar, col_bar2, bar2, threshold2)
 #############################
 # Modelling article impact ##
 #############################
+
+#missing impact factor
 
 # Preparing the data ------------------------------------------------------
 
@@ -740,26 +765,9 @@ db_impact <- db2 %>% select(year = Publication_year,
                         Title_hab,
                         n_aut,
                         journal,
-                        author_country) %>% 
+                        country_diversity) %>% 
                         mutate_at(vars(starts_with("Title_"), journal), as_factor) %>% 
-                        mutate_at(vars(author_country), as.character) %>%
-                        mutate_at(vars(n_aut, year), scale)
-
-# Chcking N° of coutnris in the reference list
-
-country_diversity <- c()
-
-for(i in 1:nrow(db_impact)){
-  
-  diversity_i <- strsplit(db_impact[i,]$author_country, split = ";")[[1]]
-  diversity_i <- trimws(diversity_i, which = c("both"))
-  diversity_i <- unique(diversity_i)
-  
-  country_diversity <- append(country_diversity, length(diversity_i))}
-
-db_impact <- cbind(db_impact,country_diversity) 
-
-db_impact <- db_impact %>% mutate_at(vars(country_diversity), scale) ; rm(country_diversity, i, diversity_i)
+                        mutate_at(vars(n_aut, year, country_diversity), scale)
 
 # Setting baseline
 levels(db_impact$Title_taxon) <- c("Mention","No mention")
@@ -778,7 +786,7 @@ nlevels(db_impact$journal)
 #dotchart(db_impact$Biodiversity) #1 outliers
 db_impact$Biodiversity <- scale(log(db_impact$Biodiversity+1)) #log transform
 
-# N° of authors and conutrey diversity are highly collinear
+# N° of authors and country diversity are collinear
 cor(db_impact$n_aut, db_impact$country_diversity) 
 
 # Testing Citations -----------------------------------------------------------
@@ -796,11 +804,12 @@ model_3 <- as.formula("citation_residuals ~ Title_geo +
                                             country_diversity +
                                             Biodiversity : Moderators +
                                             (1|journal)")
+#Biodiversity + 
 
 m3  <- lme4::lmer(model_3, data = db_impact)
 parameters::parameters(m3)
 check_collinearity(m3)
-performance::r2(m3)
+performance::r2(m3)[1]
 
 # Estract estimates
 Estimates_m3 <- 
@@ -811,6 +820,27 @@ Estimates_m3 <-
   dplyr::filter(!row_number() %in% 1) %>%  #remove intercept
   dplyr::rename(SE = 3, t = 4) #rename
 
+# Set variable order and rename
+order_var3 <- c("Mention of location in title [no]",
+                "Mention of taxon/a in title [no]",
+                "Mention of habitat in title [no]",
+                "Number of coauthors' countries",
+                "Sampled biodiversity * No moderators",
+                "Sampled biodiversity * 1 moderator",
+                "Sampled biodiversity * 2 moderators", 
+                "Sampled biodiversity * 3 moderators")
+
+Estimates_m3$Variable <- order_var3 #Rename
+Estimates_m3$Variable <- factor(Estimates_m3$Variable, rev(order_var3)) #Sort
+
+par <- parameters::parameters(m3) %>%
+  dplyr::filter(!row_number() %in% 1)
+
+par <- na.omit(par$p)
+
+sign <- ifelse(par > 0.05, "", ifelse(par > 0.01," *", " **")) #Significance
+col_p <- ifelse(par > 0.05, "grey5", "blue")
+
 #Set variable order and rename
 
 (plot_model3 <- ggplot2::ggplot(data = Estimates_m3) +
@@ -818,17 +848,18 @@ Estimates_m3 <-
     geom_pointrange(aes(x = Variable, 
                         y = Estimate,
                         ymin = Estimate-SE, 
-                        ymax = Estimate+SE), col = "grey5", size = 0.5) + 
+                        ymax = Estimate+SE), col = col_p, size = 0.5) + 
     
     geom_hline(lty = 3, size = 0.7, col = "grey50", yintercept = 0) +
+    geom_text(aes(Variable, Estimate), label = paste0(round(Estimates_m3$Estimate,2),sign), 
+              vjust = -1, size = 3, col = col_p) +
     
-    geom_text(aes(Variable, Estimate), label = round(Estimates_m3$Estimate,2), 
-              vjust = -1, size = 3, col = "grey5") +
-    
-    labs(title = "Citations [residuals]",
+    labs(title = paste0("Citations [N = ", nrow(db_impact),"]"),
          y = expression(paste("Estimate beta" %+-% "Standard Error")),
          x = NULL)+
-    theme_custom() + theme(axis.text.y  = element_text(colour = "grey5")) + coord_flip()
+    theme_custom() + theme(axis.text.y  = element_text(colour = rev(col_p))) + coord_flip() +
+    annotate(geom = 'text', x = 1, y = 3.5, size = 5,
+             label = paste0("R^2 ==",round(as.numeric(performance::r2(m3)[1]),2)), parse = TRUE)
 )
 
 # Check the interaction
@@ -837,9 +868,9 @@ Estimates_m3 <-
     geom_point(col = "grey10", fill = "grey30", size = 5, shape = 21, alpha = 0.3)+
     geom_smooth(method = "lm",  se = TRUE, col = "blue", fill = "blue",
                 formula = y ~ x) +
-    labs(x = "Sampled biodiversity [log-transformed]", 
+    labs(x = "", 
          y = "Citations [residuals]",
-         title = NULL)+ theme_custom())
+         title = "Interaction sampled biodiversity * N° of moderators")+ theme_custom())
 
 # Testing altmetric -------------------------------------------------------
 
@@ -850,8 +881,7 @@ db_alt <- na.omit(db_impact)
 # dotchart(db_alt$Altmetrics_residuals) # OK
 
 # Set formula
-model_4 <- as.formula("Altmetrics_residuals ~ 
-                                            Title_geo + 
+model_4 <- as.formula("Altmetrics_residuals ~ Title_geo + 
                                             Title_taxon + 
                                             Title_hab + 
                                             country_diversity +
@@ -872,26 +902,49 @@ Estimates_m4 <-
   dplyr::filter(!row_number() %in% 1) %>%  #remove intercept
   dplyr::rename(SE = 3, t = 4) #rename
 
-(plot_model3 <- ggplot2::ggplot(data = Estimates_m4) +
+# Set variable order and rename
+order_var4 <- c("Mention of location in title [no]",
+                "Mention of taxon/a in title [no]",
+                "Mention of habitat in title [no]",
+                "Number of coauthors' countries",
+                "Sampled biodiversity * No moderators",
+                "Sampled biodiversity * 1 moderator",
+                "Sampled biodiversity * 2 moderators", 
+                "Sampled biodiversity * 3 moderators")
+
+Estimates_m4$Variable <- order_var4 #Rename
+Estimates_m4$Variable <- factor(Estimates_m4$Variable, rev(order_var4)) #Sort
+
+par <- parameters::parameters(m4) %>%
+  dplyr::filter(!row_number() %in% 1)
+
+par <- na.omit(par$p)
+
+sign <- ifelse(par > 0.05, "", ifelse(par > 0.01," *", " **")) #Significance
+col_p <- ifelse(par > 0.05, "grey5", "blue")
+
+(plot_model4 <- ggplot2::ggplot(data = Estimates_m4) +
     
     geom_pointrange(aes(x = Variable, 
                         y = Estimate,
                         ymin = Estimate-SE, 
-                        ymax = Estimate+SE), col = "grey5", size = 0.5) + 
+                        ymax = Estimate+SE), col = col_p, size = 0.5) + 
     
     geom_hline(lty = 3, size = 0.7, col = "grey50", yintercept = 0) +
     
-    geom_text(aes(Variable, Estimate), label = round(Estimates_m3$Estimate,2), 
-              vjust = -1, size = 3, col = "grey5") +
+    geom_text(aes(Variable, Estimate), label = paste0(round(Estimates_m4$Estimate,2),sign), 
+              vjust = -1, size = 3, col = col_p) +
     
-    labs(title = "Altmetric score",
+    labs(title = paste0("Altmetric score [N = ", nrow(db_alt),"]"),
          y = expression(paste("Estimate beta" %+-% "Standard Error")),
          x = NULL)+
-    theme_custom() + theme(axis.text.y  = element_text(colour = "grey5")) + coord_flip()
+    theme_custom() + theme(axis.text.y  = element_text(colour = rev(col_p))) + coord_flip()+
+    annotate(geom = 'text', x = 1, y = 4.5, size = 5,
+             label = paste0("R^2 ==",round(as.numeric(performance::r2(m4)[1]),2)), parse = TRUE)
 )
 
 # Check the interaction
-(plot_interaction1 <- db_alt %>% ggplot2::ggplot(aes(x = Biodiversity, y = Altmetrics_residuals)) + 
+(plot_interaction2 <- db_alt %>% ggplot2::ggplot(aes(x = Biodiversity, y = Altmetrics_residuals)) + 
     facet_wrap( ~ Moderators, nrow = 2, ncol = 2) +
     geom_point(col = "grey10", fill = "grey30", size = 5, shape = 21, alpha = 0.3)+
     geom_smooth(method = "lm",  se = TRUE, col = "blue", fill = "blue",
@@ -899,6 +952,20 @@ Estimates_m4 <-
     labs(x = "Sampled biodiversity [log-transformed]", 
          y = "Altmetric score [residuals]",
          title = NULL)+ theme_custom())
+
+pdf(file = "Figure/Figure_4.pdf", width = 16, height = 14)
+
+ggpubr::ggarrange(plot_model3,plot_interaction1,plot_model4,plot_interaction2,
+                  common.legend = FALSE,
+                  #hjust = -5,
+                  align = "h",
+                  labels = c("A", "B", "C", "D"),
+                  ncol=2, nrow=2) #warnings() are due to NA removal
+dev.off()
+
+rm(col_p, sign, par)
+
+
 
 # Map ---------------------------------------------------------------------
 

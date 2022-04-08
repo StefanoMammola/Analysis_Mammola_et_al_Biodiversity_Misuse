@@ -36,7 +36,6 @@ theme_custom <- function(){
       legend.background = element_rect(color = "black", 
                                        fill = "transparent", 
                                        size = 2, linetype = "blank"))
-  
 }
 
 # Function ----------------------------------------------------------------

@@ -40,7 +40,28 @@ theme_custom <- function(){
 
 # Function ----------------------------------------------------------------
 
-# Custom function to split columns having semicolon as a separator
+# Function to clean string of words and abstracts 
+# Re-adapted from:
+# Martinez, A., & Mammola, S. (2021) Specialized terminology reduces the number of citations of scientific papers. Proceedings of the Royal Society B, 288(1948), 20202581.
+
+word.cleaner <- function(word.list, remove.punctuation = FALSE, split = FALSE, split.sep = " ") {
+  
+  if(split)
+    word.list <- strsplit(word.list, split.sep)[[1]]
+  
+  word.list <- tolower(as.vector(word.list))
+  
+  if(remove.punctuation)
+    word.list <- gsub('[[:punct:] ]+','',word.list)
+  
+  return(word.list)
+  
+}
+
+# Function to split columns having semicolon as a separator
+# Re-adapted from:
+# Mammola, S. et al. (2022). Towards evidence‐based conservation of subterranean ecosystems. Biological Reviews.
+
 semi_colon_splitter <- function(input1, input2, names = c("input1","input2")){
   
   df        <- data.frame(input1,input2)  
@@ -86,5 +107,5 @@ logisticline_max <- function(z,model) {
   1 / (1 + exp(-eta))
 }
 
-# Standard error:
+# Standard error
 std <- function(x) sd(x, na.rm = TRUE)/sqrt(length(x))

@@ -27,6 +27,7 @@ library("MuMIn")
 library("parameters")
 library("performance")
 library("sjPlot")
+library("psych")
 library("PupillometryR")
 library("tidyr")
 library("tidytext")
@@ -148,6 +149,77 @@ db_alt <- data.frame(db_alt, Altmetrics_residuals = resid(M1,type="pearson")) # 
 db_alt <- db_alt %>% select(row_ID,Altmetrics_residuals)
 
 db <- db %>% dplyr::left_join(db_alt, by = "row_ID") ; rm(db_alt, M0, M1)
+
+###########################
+# Data preparation part 3 #
+###########################
+
+# Assigning Impact factor for each publication ----------------------------
+
+# Uploading the database with all Impact factors between 1997 and 2020 (from Clarivate analytics Journal Citation report)
+my_files   <- paste("Data/IF/", list.files("Data/IF/"), sep = '')
+all_IF     <- lapply(my_files, read.csv, header = TRUE, sep = ",") 
+
+# watch out that 2019 and 2020 are new the new WSC format!!
+str(all_IF[[23]])  #Wrong!
+
+# Reading thhem manually:
+all_IF[[23]] <- read.csv(file = my_files[23], header = TRUE, sep = "\t")
+all_IF[[24]] <- read.csv(file = my_files[24], header = TRUE, sep = "\t")
+
+str(all_IF[[23]]) #ok!
+str(all_IF[[24]]) #ok!
+
+# Generating a database list all journal and their impact factor for each year
+my_IF <- list() ; year_IF <- 1997:2020
+
+for (k in 1 : length(all_IF)){
+  
+  if (k < 23) {
+
+  df <- all_IF[[k]]
+  df <- df[,c(2,4)]
+  colnames(df) <- c("journal", "IF")
+  df[df == "Not Available"] <- "NA"
+  
+  df$IF         <- as.numeric(as.character(df$IF))
+
+  df$journal    <- sapply(df$journal, word.cleaner, remove.punctuation = TRUE) #simplify journal string
+  df$journal    <- paste(df$journal, rep(year_IF[[k]],nrow(df)),sep='') #paste journal and year
+  
+  df <- df %>% distinct()
+  
+  my_IF[[k]] <- df
+  
+  } else {  
+    df <- all_IF[[k]]
+
+    colnames(df) <- c("journal", "IF")
+    df[df == "Not Available"] <- "NA"
+    
+    df$IF         <- as.numeric(as.character(df$IF))
+    df$journal    <- as.character(df$journal)
+    
+    df$journal    <- sapply(df$journal, word.cleaner, remove.punctuation = TRUE) #simplify journal string
+    df$journal    <- paste(df$journal, rep(year_IF[[k]],nrow(df)),sep='') #paste journal and year
+  
+    df <- df %>% distinct()
+    
+    my_IF[[k]] <- df
+  }
+  
+} 
+warnings() # ( Warning is due to creation of missing data)
+
+# Unlist the list at last
+IF_1997_2020 <- do.call("rbind", my_IF)
+colnames(IF_1997_2020)[1] <- "JI_PY"
+
+db$JI_PY <- paste(word.cleaner(db$journal,remove.punctuation = TRUE), db$Publication_year,sep='')
+
+db <- db %>% dplyr::left_join(IF_1997_2020, by = "JI_PY")
+
+rm(my_files,all_IF,my_IF,df,IF_1997_2020,i,k) #cleaning
 
 #####################################
 # Summary stats  & Data exploration #
@@ -765,9 +837,11 @@ db_impact <- db2 %>% select(year = Publication_year,
                         Title_hab,
                         n_aut,
                         journal,
+                        IF,
                         country_diversity) %>% 
-                        mutate_at(vars(starts_with("Title_"), journal), as_factor) %>% 
-                        mutate_at(vars(n_aut, year, country_diversity), scale)
+                        mutate_at(vars(starts_with("Title_"), journal), as_factor) 
+#%>% 
+#                        mutate_at(vars(n_aut, year, country_diversity, IF), scale)
 
 # Setting baseline
 levels(db_impact$Title_taxon) <- c("Mention","No mention")
@@ -782,12 +856,24 @@ db_impact <- within(db_impact, Title_hab   <- relevel(Title_hab, ref = "Mention"
 #Random factor levels
 nlevels(db_impact$journal) 
 
+# Collinearity
+psych::pairs.panels(db_impact %>% as.data.frame %>% select(n_aut, country_diversity, IF, Altmetrics_residuals, citation_residuals))
+#Dropping country diversity
+
 # Checking outliers
 #dotchart(db_impact$Biodiversity) #1 outliers
-db_impact$Biodiversity <- scale(log(db_impact$Biodiversity+1)) #log transform
+#dotchart(db_impact$n_aut)
+#dotchart(db_impact$IF) 
+db_impact$Biodiversity <- log(db_impact$Biodiversity+1) #log transform
+db_impact$IFlog        <- log(db_impact$IF+1) #log transform
+db_impact$n_aut        <- log(db_impact$n_aut+1) #log transform
 
-# N° of authors and country diversity are collinear
-cor(db_impact$n_aut, db_impact$country_diversity) 
+# What's the relationship between altmetrics and citations
+db_impact %>% ggplot2::ggplot(aes(x = log(Altmetrics_residuals+1), y = log(citation_residuals+1))) + 
+  geom_point(col = "grey10", fill = "grey30", size = 5, shape = 21, alpha = 0.3) + 
+  geom_smooth(method = "lm",  se = TRUE, col = "blue", fill = "blue",
+              formula = y ~ x) +
+  theme_custom()
 
 # Testing Citations -----------------------------------------------------------
 
@@ -796,20 +882,31 @@ par(mar= c(rep(2,4)))
 #dotchart(db_impact$citation_residuals)  #1 outlier
 db_cit <- db_impact %>% filter(citation_residuals < 150) #removing outlier
 
-# First model (all moderators sum,ed)
+db_cit <- db_cit %>% select(citation_residuals,
+                            Biodiversity,
+                            Moderators,
+                            Title_geo,
+                            Title_taxon,              
+                            Title_hab,
+                            country_diversity,
+                            journal,
+                            IFlog)
 
+db_cit <- na.omit(db_cit)
+
+# First model (all moderators sum,ed)
 model_3 <- as.formula("citation_residuals ~ Title_geo + 
                                             Title_taxon + 
                                             Title_hab + 
                                             country_diversity +
+                                            IFlog +
                                             Biodiversity : Moderators +
                                             (1|journal)")
-#Biodiversity + 
 
 m3  <- lme4::lmer(model_3, data = db_impact)
 parameters::parameters(m3)
 check_collinearity(m3)
-performance::r2(m3)[1]
+performance::r2(m3)
 
 # Estract estimates
 Estimates_m3 <- 
@@ -825,10 +922,11 @@ order_var3 <- c("Mention of location in title [no]",
                 "Mention of taxon/a in title [no]",
                 "Mention of habitat in title [no]",
                 "Number of coauthors' countries",
-                "Sampled biodiversity * No moderators",
-                "Sampled biodiversity * 1 moderator",
-                "Sampled biodiversity * 2 moderators", 
-                "Sampled biodiversity * 3 moderators")
+                "Impact factor",
+                "Sampled biodiversity : No moderators",
+                "Sampled biodiversity : 1 moderator",
+                "Sampled biodiversity : 2 moderators", 
+                "Sampled biodiversity : 3 moderators")
 
 Estimates_m3$Variable <- order_var3 #Rename
 Estimates_m3$Variable <- factor(Estimates_m3$Variable, rev(order_var3)) #Sort
@@ -854,11 +952,11 @@ col_p <- ifelse(par > 0.05, "grey5", "blue")
     geom_text(aes(Variable, Estimate), label = paste0(round(Estimates_m3$Estimate,2),sign), 
               vjust = -1, size = 3, col = col_p) +
     
-    labs(title = paste0("Citations [N = ", nrow(db_impact),"]"),
+    labs(title = paste0("Citations [N = ", nrow(db_cit),"]"),
          y = expression(paste("Estimate beta" %+-% "Standard Error")),
          x = NULL)+
     theme_custom() + theme(axis.text.y  = element_text(colour = rev(col_p))) + coord_flip() +
-    annotate(geom = 'text', x = 1, y = 3.5, size = 5,
+    annotate(geom = 'text', x = 1, y = 7.5, size = 5,
              label = paste0("R^2 ==",round(as.numeric(performance::r2(m3)[1]),2)), parse = TRUE)
 )
 
@@ -874,24 +972,45 @@ col_p <- ifelse(par > 0.05, "grey5", "blue")
 
 # Testing altmetric -------------------------------------------------------
 
-db_alt <- na.omit(db_impact)
+db_alt <- db_impact %>% select(Altmetrics_residuals,
+                            Biodiversity,
+                            Moderators,
+                            Title_geo,
+                            Title_taxon,              
+                            Title_hab,
+                            country_diversity,
+                            journal,
+                            IFlog)
+
+db_alt <- na.omit(db_alt)
+
+db_alt$Moderators <- droplevels(db_alt$Moderators)
 
 # Checking outliers
 # par(mar= c(rep(2,4)))
 # dotchart(db_alt$Altmetrics_residuals) # OK
 
 # Set formula
-model_4 <- as.formula("Altmetrics_residuals ~ Title_geo + 
-                                            Title_taxon + 
-                                            Title_hab + 
-                                            country_diversity +
-                                            Biodiversity : Moderators +
-                                            (1|journal)")
+model_4 <- as.formula("Altmetrics_residuals ~ country_diversity + IFlog +
+                                              Title_geo + Title_taxon + Title_hab + 
+                                              Biodiversity : Moderators 
+                                              + (1|journal)")
+
+
+# model_4 <- as.formula("Altmetrics_residuals ~ 
+#                                               country_diversity +
+#                                               IF +
+#                                               Biodiversity : Title_geo +
+#                                               Biodiversity : Title_hab +
+#                                               Biodiversity : Title_taxon +
+#                                               (1|journal)")
 
 # Initial model
 m4 <- lme4::lmer(model_4, data = db_alt)
 performance::r2(m4)
 parameters::parameters(m4)
+
+pairs(emmeans::emmeans(m4, ~ Biodiversity : Moderators), simple=c("Moderators"))
 
 # Estract estimates
 Estimates_m4 <- 
@@ -907,10 +1026,11 @@ order_var4 <- c("Mention of location in title [no]",
                 "Mention of taxon/a in title [no]",
                 "Mention of habitat in title [no]",
                 "Number of coauthors' countries",
-                "Sampled biodiversity * No moderators",
-                "Sampled biodiversity * 1 moderator",
-                "Sampled biodiversity * 2 moderators", 
-                "Sampled biodiversity * 3 moderators")
+                "Impact factor",
+                "Sampled biodiversity : No moderators",
+                "Sampled biodiversity : 1 moderator",
+                "Sampled biodiversity : 2 moderators", 
+                "Sampled biodiversity : 3 moderators")
 
 Estimates_m4$Variable <- order_var4 #Rename
 Estimates_m4$Variable <- factor(Estimates_m4$Variable, rev(order_var4)) #Sort
@@ -939,7 +1059,7 @@ col_p <- ifelse(par > 0.05, "grey5", "blue")
          y = expression(paste("Estimate beta" %+-% "Standard Error")),
          x = NULL)+
     theme_custom() + theme(axis.text.y  = element_text(colour = rev(col_p))) + coord_flip()+
-    annotate(geom = 'text', x = 1, y = 4.5, size = 5,
+    annotate(geom = 'text', x = 1, y = 7.5, size = 5,
              label = paste0("R^2 ==",round(as.numeric(performance::r2(m4)[1]),2)), parse = TRUE)
 )
 
@@ -953,6 +1073,7 @@ col_p <- ifelse(par > 0.05, "grey5", "blue")
          y = "Altmetric score [residuals]",
          title = NULL)+ theme_custom())
 
+# Store the final figure
 pdf(file = "Figure/Figure_4.pdf", width = 16, height = 14)
 
 ggpubr::ggarrange(plot_model3,plot_interaction1,plot_model4,plot_interaction2,

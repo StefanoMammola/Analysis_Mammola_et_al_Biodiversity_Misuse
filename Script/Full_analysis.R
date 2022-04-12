@@ -839,8 +839,9 @@ db_impact <- db2 %>% select(year = Publication_year,
                         journal,
                         IF,
                         country_diversity) %>% 
-                        mutate_at(vars(starts_with("Title_"), journal), as_factor) %>% 
-                        mutate_at(vars(n_aut, year, country_diversity, IF), scale)
+                        mutate_at(vars(starts_with("Title_"), journal), as_factor) 
+#%>% 
+#                        mutate_at(vars(n_aut, year, country_diversity, IF), scale)
 
 # Setting baseline
 levels(db_impact$Title_taxon) <- c("Mention","No mention")
@@ -856,7 +857,7 @@ db_impact <- within(db_impact, Title_hab   <- relevel(Title_hab, ref = "Mention"
 nlevels(db_impact$journal) 
 
 # Collinearity
-psych::pairs.panels(db_impact %>% as.data.frame %>% select(n_aut, country_diversity, IF))
+psych::pairs.panels(db_impact %>% as.data.frame %>% select(n_aut, country_diversity, IF, Altmetrics_residuals, citation_residuals))
 #Dropping country diversity
 
 # Checking outliers
@@ -864,20 +865,15 @@ psych::pairs.panels(db_impact %>% as.data.frame %>% select(n_aut, country_divers
 #dotchart(db_impact$n_aut)
 #dotchart(db_impact$IF) 
 db_impact$Biodiversity <- log(db_impact$Biodiversity+1) #log transform
-db_impact$IF <- log(db_impact$IF+1) #log transform
-db_impact$n_aut <- log(db_impact$n_aut+1) #log transform
+db_impact$IFlog        <- log(db_impact$IF+1) #log transform
+db_impact$n_aut        <- log(db_impact$n_aut+1) #log transform
 
 # What's the relationship between altmetrics and citations
-
 db_impact %>% ggplot2::ggplot(aes(x = log(Altmetrics_residuals+1), y = log(citation_residuals+1))) + 
   geom_point(col = "grey10", fill = "grey30", size = 5, shape = 21, alpha = 0.3) + 
   geom_smooth(method = "lm",  se = TRUE, col = "blue", fill = "blue",
               formula = y ~ x) +
   theme_custom()
-
-
-# Relationships with Y
-psych::pairs.panels(db_impact %>% as.data.frame %>% select(citation_residuals, Altmetrics_residuals, n_aut, country_diversity, IF))
 
 # Testing Citations -----------------------------------------------------------
 
@@ -894,24 +890,23 @@ db_cit <- db_cit %>% select(citation_residuals,
                             Title_hab,
                             country_diversity,
                             journal,
-                            IF)
+                            IFlog)
 
 db_cit <- na.omit(db_cit)
 
 # First model (all moderators sum,ed)
-
 model_3 <- as.formula("citation_residuals ~ Title_geo + 
                                             Title_taxon + 
                                             Title_hab + 
                                             country_diversity +
-                                            IF +
+                                            IFlog +
                                             Biodiversity : Moderators +
                                             (1|journal)")
 
 m3  <- lme4::lmer(model_3, data = db_impact)
 parameters::parameters(m3)
 check_collinearity(m3)
-performance::r2(m3)[1]
+performance::r2(m3)
 
 # Estract estimates
 Estimates_m3 <- 
@@ -977,7 +972,7 @@ col_p <- ifelse(par > 0.05, "grey5", "blue")
 
 # Testing altmetric -------------------------------------------------------
 
-db_alt <- db_alt %>% select(Altmetrics_residuals,
+db_alt <- db_impact %>% select(Altmetrics_residuals,
                             Biodiversity,
                             Moderators,
                             Title_geo,
@@ -985,22 +980,21 @@ db_alt <- db_alt %>% select(Altmetrics_residuals,
                             Title_hab,
                             country_diversity,
                             journal,
-                            IF)
+                            IFlog)
 
 db_alt <- na.omit(db_alt)
+
+db_alt$Moderators <- droplevels(db_alt$Moderators)
 
 # Checking outliers
 # par(mar= c(rep(2,4)))
 # dotchart(db_alt$Altmetrics_residuals) # OK
 
 # Set formula
-model_4 <- as.formula("Altmetrics_residuals ~ Title_geo + 
-                                              Title_taxon + 
-                                              Title_hab + 
-                                              country_diversity +
-                                              IF +
-                                              Biodiversity : Moderators +
-                                              (1|journal)")
+model_4 <- as.formula("Altmetrics_residuals ~ country_diversity + IFlog +
+                                              Title_geo + Title_taxon + Title_hab + 
+                                              Biodiversity : Moderators 
+                                              + (1|journal)")
 
 
 # model_4 <- as.formula("Altmetrics_residuals ~ 
@@ -1015,6 +1009,8 @@ model_4 <- as.formula("Altmetrics_residuals ~ Title_geo +
 m4 <- lme4::lmer(model_4, data = db_alt)
 performance::r2(m4)
 parameters::parameters(m4)
+
+pairs(emmeans::emmeans(m4, ~ Biodiversity : Moderators), simple=c("Moderators"))
 
 # Estract estimates
 Estimates_m4 <- 
@@ -1073,7 +1069,7 @@ col_p <- ifelse(par > 0.05, "grey5", "blue")
     geom_point(col = "grey10", fill = "grey30", size = 5, shape = 21, alpha = 0.3)+
     geom_smooth(method = "lm",  se = TRUE, col = "blue", fill = "blue",
                 formula = y ~ x) +
-    labs(x = "Sampled biodiversity [scaled and log-transformed]", 
+    labs(x = "Sampled biodiversity [log-transformed]", 
          y = "Altmetric score [residuals]",
          title = NULL)+ theme_custom())
 

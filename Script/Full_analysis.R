@@ -476,7 +476,7 @@ db_glm$total <- length(36:91)
 # dotchart(db_glm$citation_residuals) # 1 outlier
 # dotchart(db_glm$prop) #2 outliers
 
-db_glm <- db_glm[db_glm$citation_residuals < 200,]
+#db_glm <- db_glm[db_glm$citation_residuals < 200,]
 db_glm <- db_glm[db_glm$prop < 20,]
 
 # Scale continuous variables
@@ -521,13 +521,13 @@ order_var1 <- c("Year of publication",
                "Domain [Terrestrial]",
                "Domain [Saltwater]",
                "Domain [Freshwater]",
-               "Geographic [Palearctic]",
-               "Geographic [Afrotropical]",
-               "Geographic [Indomalayan]",
-               "Geographic [Neartic]",
-               "Geographic [Australasian]",
-               "Geographic [Neotropical]",
-               "Geographic [Antartic]",
+               "Biogeography [Palearctic]",
+               "Biogeography [Afrotropical]",
+               "Biogeography [Indomalayan]",
+               "Biogeography [Neartic]",
+               "Biogeography [Australasian]",
+               "Biogeography [Neotropical]",
+               "Biogeography [Antartic]",
                "Method [Review/Opinion]",
                "Method [Field sampling]",
                "Method [Big data]",
@@ -561,7 +561,7 @@ plot_model1 <- ggplot2::ggplot(data = Estimates_m1) +
               vjust = -1, size = 3, col = col_p) +
    
     labs(title = paste0("Articles with biodiversity proportion > 0 [N = ",nrow(db_glm),"]"),
-         y = expression(paste("Odds ratio" %+-% "Standard Error")),
+         y = expression(paste("Effect size" %+-% "Standard Error")),
          x = NULL)+
     theme_custom() + theme(axis.text.y  = element_text(colour = rev(col_p))) + coord_flip()+
   annotate(geom = 'text', x = 2, y = -0.9, size =5,
@@ -669,11 +669,11 @@ Estimates_m2 <-
 order_var2 <- c("Year of publication",
                 "Domain [Terrestrial]",
                 "Domain [Aquatic]",
-                "Geographic [Palearctic]",
-                "Geographic [Afrotropical]",
-                "Geographic [Neartic]",
-                "Geographic [Australasian]",
-                "Geographic [Neotropical]",
+                "Biogeography [Palearctic]",
+                "Biogeography [Afrotropical]",
+                "Biogeography [Neartic]",
+                "Biogeography [Australasian]",
+                "Biogeography [Neotropical]",
                 "Method [Review/Opinion]",
                 "Method [Field sampling]",
                 "Method [Big data]",
@@ -703,7 +703,7 @@ plot_model2 <- ggplot2::ggplot(data = Estimates_m2) +
               vjust = -1, size = 3, col = col_p) +
     
     labs(title = paste0("Articles with no moderators in the title [N = ",nrow(db_glm2),"]"),
-         y = expression(paste("Odds ratio" %+-% "Standard Error")),
+         y = expression(paste("Effect size" %+-% "Standard Error")),
          x = NULL)+
     theme_custom() + theme(axis.text.y  = element_text(colour = rev(col_p))) + coord_flip()+
   annotate(geom = 'text', x = 1.2, y = -0.7, size =5,
@@ -953,7 +953,7 @@ col_p <- ifelse(par > 0.05, "grey5", "blue")
               vjust = -1, size = 3, col = col_p) +
     
     labs(title = paste0("Citations [N = ", nrow(db_cit),"]"),
-         y = expression(paste("Estimate beta" %+-% "Standard Error")),
+         y = expression(paste("Effect size" %+-% "Standard Error")),
          x = NULL)+
     theme_custom() + theme(axis.text.y  = element_text(colour = rev(col_p))) + coord_flip() +
     annotate(geom = 'text', x = 1, y = 7.5, size = 5,
@@ -991,10 +991,13 @@ db_alt$Moderators <- droplevels(db_alt$Moderators)
 # dotchart(db_alt$Altmetrics_residuals) # OK
 
 # Set formula
-model_4 <- as.formula("Altmetrics_residuals ~ country_diversity + IFlog +
-                                              Title_geo + Title_taxon + Title_hab + 
-                                              Biodiversity : Moderators 
-                                              + (1|journal)")
+model_4 <- as.formula("Altmetrics_residuals ~ Title_geo + 
+                                            Title_taxon + 
+                                            Title_hab + 
+                                            country_diversity +
+                                            IFlog +
+                                            Biodiversity : Moderators +
+                                            (1|journal)")
 
 
 # model_4 <- as.formula("Altmetrics_residuals ~ 
@@ -1056,7 +1059,7 @@ col_p <- ifelse(par > 0.05, "grey5", "blue")
               vjust = -1, size = 3, col = col_p) +
     
     labs(title = paste0("Altmetric score [N = ", nrow(db_alt),"]"),
-         y = expression(paste("Estimate beta" %+-% "Standard Error")),
+         y = expression(paste("Effect size" %+-% "Standard Error")),
          x = NULL)+
     theme_custom() + theme(axis.text.y  = element_text(colour = rev(col_p))) + coord_flip()+
     annotate(geom = 'text', x = 1, y = 7.5, size = 5,

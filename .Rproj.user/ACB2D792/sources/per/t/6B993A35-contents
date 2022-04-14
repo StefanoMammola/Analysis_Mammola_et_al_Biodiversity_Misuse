@@ -9,6 +9,12 @@
 # Analysis performed with R (v. R 4.1.0) and R studio (v. 1.4.1103)
 # Authors: Stefano Mammola
 
+
+# DA FARE::
+
+# Sommare Marine + Saltwater?
+# Interrater agreement?
+
 ####################
 # Data preparation #
 ####################

@@ -758,7 +758,7 @@ barchart1 <- ggplot(bar1, aes(x = Phyla, y = N))+
     labs(x = NULL, y = "Count")+
     scale_fill_manual(values = col_bar)+
     theme_custom()+ 
-    theme(legend.position = "none")+ 
+    theme(legend.position = c(0.75,0.45))+ 
     coord_flip()+
     annotate(geom = "text", y = bar1[nrow(bar1),2] + 2, 
              x = nrow(bar1), 
@@ -801,7 +801,7 @@ barchart2 <- ggplot(bar2, aes(x = Phyla, y = N))+
     labs(x = NULL, y = "Count")+
     scale_fill_manual(values = col_bar2) +
     theme_custom() + 
-    theme(legend.position = c(0.75,0.45)) + 
+    theme(legend.position = "none") + 
     coord_flip() +
     annotate(geom = "text", y = bar2[nrow(bar2),2] + 1, 
              x = nrow(bar2), 
@@ -860,7 +860,7 @@ db_impact <- within(db_impact, Title_taxon <- relevel(Title_taxon, ref = "Mentio
 db_impact <- within(db_impact, Title_hab   <- relevel(Title_hab, ref = "Mention"))
 
 #Random factor levels
-nlevels(db_impact$journal) 
+nlevels(db_impact$journal) #281
 
 # Collinearity
 psych::pairs.panels(db_impact %>% as.data.frame %>% select(n_aut, country_diversity, IF, Altmetrics_residuals, citation_residuals))
@@ -868,11 +868,13 @@ psych::pairs.panels(db_impact %>% as.data.frame %>% select(n_aut, country_divers
 
 # Checking outliers
 #dotchart(db_impact$Biodiversity) #1 outliers
+#dotchart(db_impact$country_diversity)
 #dotchart(db_impact$n_aut)
 #dotchart(db_impact$IF) 
-db_impact$Biodiversity <- log(db_impact$Biodiversity+1) #log transform
-db_impact$IFlog        <- log(db_impact$IF+1) #log transform
-db_impact$n_aut        <- log(db_impact$n_aut+1) #log transform
+db_impact$Biodiversity      <- log(db_impact$Biodiversity+1) #log transform
+db_impact$IFlog             <- log(db_impact$IF+1) #log transform
+db_impact$n_aut             <- log(db_impact$n_aut+1) #log transform
+db_impact$country_diversity <- log(db_impact$country_diversity+1) #log transform
 
 # What's the relationship between altmetrics and citations
 db_impact %>% ggplot2::ggplot(aes(x = log(Altmetrics_residuals+1), y = log(citation_residuals+1))) + 
@@ -911,8 +913,16 @@ model_3 <- as.formula("citation_residuals ~ Title_geo +
 
 m3  <- lme4::lmer(model_3, data = db_impact)
 parameters::parameters(m3)
-check_collinearity(m3)
 performance::r2(m3)
+
+#Collinearity
+performance::check_collinearity(m3) #OK (checked with model with no interaction)
+
+#normality or residuals
+hist(resid(m3), breaks = 200) #ok, just a bit of tail
+
+#Contrast
+pairs(emmeans::emmeans(m3, ~ Biodiversity : Moderators), simple=c("Moderators"))
 
 # Estract estimates
 Estimates_m3 <- 
@@ -1019,6 +1029,13 @@ m4 <- lme4::lmer(model_4, data = db_alt)
 performance::r2(m4)
 parameters::parameters(m4)
 
+#Collinearity
+performance::check_collinearity(m4) #OK (checked with model with no interaction)
+
+#normality or residuals
+hist(resid(m4), breaks = 200) #ok, just a bit of tail
+
+#Contrast
 pairs(emmeans::emmeans(m4, ~ Biodiversity : Moderators), simple=c("Moderators"))
 
 # Estract estimates

@@ -1,0 +1,570 @@
+################################
+
+# Cardoso, P. et al. TITLE OF THE PAPER. Methods in Ecology and Evolution, submitted
+
+## Code authors: Thomas Guillerme (guillert@tcd.ie), Stefano Mammola (stefano.mammola@cnr.it)
+
+## Software: R (v. R 4.1.0) and R studio (v. 1.4.1103)
+
+## ------------
+## Preparatory steps
+## ------------
+
+## Set seed
+
+set.seed(42)
+
+## Set working directory
+
+setwd("/Users/stefanomammola/Desktop/Cardoso et al. HYPERTREE")
+
+## Loading R packages for simulations
+
+library("dads") #devtools::install_github("TGuillerme/dads")
+
+## Loading new version of BAT (not yet in CRAN)
+
+source("BAT290.R")
+
+# Custom function
+quiet <- function(x) { 
+  sink(tempfile()) 
+  on.exit(sink()) 
+  invisible(force(x)) 
+} 
+
+## ------------
+## Running multiple simulations
+## ------------
+
+# Set scenarios
+n.trait <- c(1,2,4,8)
+n.sp    <- 100
+n.sim   <- 10
+
+# Set simul parameters
+bd_params <- make.bd.params(speciation = runif,
+                            extinction = runif,
+                            joint      = TRUE)
+
+# Generate simulations of traits
+Sp_Traits_BM <- list()
+Sp_Traits_OU <- list()
+
+for(i in 1:length(n.trait)) { 
+
+  # the Brownian motion (BM) where the variance at t+1 is independent of the variance at t-1 (which effectively results in a constant increase in trait variance through time).
+  trait_processes_BM <- make.traits(process = BM.process, n = n.trait[i])
+  
+  # the Ornstein-Uhlenbeck process (OU) where the variance at t+1 is independent of the variance at t-1 but is limited by a parameter (alpha) that doesn't allow the step at t+1 to take a value too big compared to the initial conditions (which effectively results in an initial increase of variance and then stochastic stability of the trait through time).
+  trait_processes_OU <- make.traits(process = OU.process, n = n.trait[i])
+  
+  Sp_Traits_BM[[i]] <- replicate(n.sim, 
+                                 dads(bd.params      = bd_params,
+                                      stop.rule      = list(max.living = n.sp),
+                                      traits         = trait_processes_BM,
+                                      null.error     = 100), 
+                                 simplify = FALSE)
+  
+  Sp_Traits_OU[[i]] <- replicate(n.sim, 
+                                 dads(bd.params      = bd_params,
+                                      stop.rule      = list(max.living = n.sp),
+                                      traits         = trait_processes_OU,
+                                      null.error     = 100), 
+                                 simplify = FALSE)
+
+}
+
+names(Sp_Traits_BM) <- paste0(rep("Trait_", length (n.trait)), n.trait)
+names(Sp_Traits_OU) <- paste0(rep("Trait_", length (n.trait)), n.trait)
+
+saveRDS(Sp_Traits_BM, file = "tree_traits_BM.rds")
+saveRDS(Sp_Traits_OU, file = "tree_traits_OU.rds")
+
+# Analyse brownian motion ------------------------------------------------
+
+Sp_Traits_BM <- readRDS("tree_traits_BM.rds")
+
+n.trait <- c(1,2,4,8)
+comm_list <- list()
+
+
+# Generate simuls (first loops over number of traits, next on species)
+for(i in 1 : length(Sp_Traits_BM)) {  
+  
+  message(paste("Selecting trait n° ", n.trait[i]))
+  
+  Sp_Traits_i <- Sp_Traits_BM[[i]]
+  
+  #Loop ver traits
+  for(j in 1 : length(Sp_Traits_i)) { 
+    
+    traits_j <- drop.fossil.dads(Sp_Traits_i[[j]])
+    
+    # Generate the random communities for the run
+    if(j == 1){ 
+    
+      comm <- sample(c(rep(0,90), rep(1,10))) #Community with 10 species
+    
+    for(k in seq(from = 20, to = 100, by = 10) ) 
+      comm <- rbind(comm, sample(c(rep(0, 100 - k), rep(1, k))) ) #Communities with 20 to 100 species
+    
+    rownames(comm) <- paste0(rep("Comm",10), 1:10)
+    colnames(comm) <- rownames(traits_j)
+    
+    comm_list[[i]] <- comm # store
+    } 
+    
+    # select traits
+    traits_j <- traits_j$data[rownames(traits_j$data) %in% traits_j$tree$tip.label, , drop = FALSE]
+    #nrow(traits_j) #Should be 100!
+    
+    message(paste0("-------- Simulation ", j , " out of ", length(Sp_Traits_i)))
+    
+    message("------ Estimating nj trees ------")
+    
+    #Calculate stats with nj Trees
+    tree_nj <- tree.build(traits_j, distance = "gower", func = "nj")
+    
+    r_tree_nj <- alpha(comm = comm, tree = tree_nj) #richness
+    d_tree_nj <- dispersion(comm = comm, tree = tree_nj) #divergence
+    e_tree_nj <- evenness(comm = comm, tree = tree_nj) #regularity
+    
+    message("------ Estimating UPGMA trees ------")
+    
+    #Calculate stats with nj Trees
+    tree_upgma <- tree.build(traits_j, distance = "gower", func = "upgma")
+    
+    r_tree_upgma <- alpha(comm = comm, tree = tree_upgma) #richness
+    d_tree_upgma <- dispersion(comm = comm, tree = tree_upgma) #divergence
+    e_tree_upgma <- evenness(comm = comm, tree = tree_upgma) #regularity
+    
+    message("------ Estimating hypervolumes ------")
+    
+    #Calculate stats with hypervolumes
+    hv <- quiet(kernel.build(comm = comm, trait = traits_j, method = "box", cores = 10))
+    
+    r_hv <- kernel.alpha(hv) ; names(r_hv) <- NULL #richness 
+    d_hv <- kernel.dispersion(hv) ; names(d_hv) <- NULL #divergence
+    e_hv <- quiet(kernel.evenness(hv)) ; names(e_hv) <- NULL #regularity
+    
+    #Store the results
+    
+    if(j > 1) {
+      
+      n_trait         <- c(n_trait, rep(ncol(traits_j),10))
+      n_species       <- c(n_species, seq(from = 10, to = 100, by = 10))
+      simulation      <- c(simulation, rep(j, nrow(comm)))
+      ric_tree_nj     <- c(ric_tree_nj, r_tree_nj)
+      div_tree_nj     <- c(div_tree_nj, d_tree_nj)
+      reg_tree_nj     <- c(reg_tree_nj, e_tree_nj)
+      ric_tree_upgma  <- c(ric_tree_upgma, r_tree_upgma)
+      div_tree_upgma  <- c(div_tree_upgma, d_tree_upgma) 
+      reg_tree_upgma  <- c(reg_tree_upgma, e_tree_upgma) 
+      ric_hv          <- c(ric_hv, r_hv)
+      div_hv          <- c(div_hv, d_hv)
+      reg_hv          <- c(reg_hv, e_hv)
+      
+    } else { 
+      
+      n_trait         <- rep(ncol(traits_j),10)
+      n_species       <- seq(from = 10, to = 100, by = 10)
+      simulation      <- rep(j, nrow(comm))
+      ric_tree_nj     <- r_tree_nj 
+      div_tree_nj     <- d_tree_nj 
+      reg_tree_nj     <- e_tree_nj 
+      ric_tree_upgma  <- r_tree_upgma
+      div_tree_upgma  <- d_tree_upgma 
+      reg_tree_upgma  <- e_tree_upgma 
+      ric_hv          <- r_hv
+      div_hv          <- d_hv
+      reg_hv          <- e_hv
+      
+    }
+  }
+  
+  if(i > 1) {
+  results <- rbind(results, data.frame(
+                        process = rep("BM", length(simulation)),
+                        n_trait,
+                        n_species,
+                        simulation,
+                        ric_tree_nj,
+                        div_tree_nj,
+                        reg_tree_nj,
+                        ric_tree_upgma,
+                        div_tree_upgma, 
+                        reg_tree_upgma,  
+                        ric_hv,   
+                        div_hv,  
+                        reg_hv))
+  } else {
+  
+    results <- data.frame(process = rep("BM", length(simulation)),
+                          n_trait,
+                          n_species,
+                          simulation,
+                          ric_tree_nj,
+                          div_tree_nj,
+                          reg_tree_nj,
+                          ric_tree_upgma,
+                          div_tree_upgma, 
+                          reg_tree_upgma,  
+                          ric_hv,   
+                          div_hv,  
+                          reg_hv)
+  }
+}
+
+## Save
+saveRDS(results, file = "results_BM.rds")
+saveRDS(comm_list, file = "random_communities.rds")
+
+# Analyse OU -------------------------------------------------------------
+
+Sp_Traits_OU <- readRDS("tree_traits_OU.rds")
+comm_list    <- readRDS("random_communities.rds")
+
+n.trait <- c(1,2,4,8)
+
+# Generate simuls (first loops over number of traits, next on species)
+for(i in 1 : length(Sp_Traits_OU)) {  
+  
+  message(paste("Selecting trait n° ", n.trait[i]))
+  
+  Sp_Traits_i <- Sp_Traits_OU[[i]]
+  comm <- comm_list[[i]]
+  
+  #Loop ver traits
+  for(j in 1 : length(Sp_Traits_i)) { 
+    
+    traits_j <- drop.fossil.dads(Sp_Traits_i[[j]])
+    
+    # select traits
+    traits_j <- traits_j$data[rownames(traits_j$data) %in% traits_j$tree$tip.label, , drop = FALSE]
+    #nrow(traits_j) #Should be 100!
+    
+    message(paste0("-------- Simulation ", j , " out of ", length(Sp_Traits_i)))
+    
+    message("------ Estimating nj trees ------")
+    
+    #Calculate stats with nj Trees
+    tree_nj <- tree.build(traits_j, distance = "gower", func = "nj")
+    
+    r_tree_nj <- alpha(comm = comm, tree = tree_nj) #richness
+    d_tree_nj <- dispersion(comm = comm, tree = tree_nj) #divergence
+    e_tree_nj <- evenness(comm = comm, tree = tree_nj) #regularity
+    
+    message("------ Estimating UPGMA trees ------")
+    
+    #Calculate stats with nj Trees
+    tree_upgma <- tree.build(traits_j, distance = "gower", func = "upgma")
+    
+    r_tree_upgma <- alpha(comm = comm, tree = tree_upgma) #richness
+    d_tree_upgma <- dispersion(comm = comm, tree = tree_upgma) #divergence
+    e_tree_upgma <- evenness(comm = comm, tree = tree_upgma) #regularity
+    
+    message("------ Estimating hypervolumes ------")
+    
+    #Calculate stats with hypervolumes
+    hv <- quiet(kernel.build(comm = comm, trait = traits_j, method = "box", cores = 10))
+    
+    r_hv <- kernel.alpha(hv) ; names(r_hv) <- NULL #richness 
+    d_hv <- kernel.dispersion(hv) ; names(d_hv) <- NULL #divergence
+    e_hv <- quiet(kernel.evenness(hv)) ; names(e_hv) <- NULL #regularity
+    
+    #Store the results
+    
+    if(j > 1) {
+      
+      n_trait         <- c(n_trait, rep(ncol(traits_j),10))
+      n_species       <- c(n_species, seq(from = 10, to = 100, by = 10))
+      simulation      <- c(simulation, rep(j, nrow(comm)))
+      ric_tree_nj     <- c(ric_tree_nj, r_tree_nj)
+      div_tree_nj     <- c(div_tree_nj, d_tree_nj)
+      reg_tree_nj     <- c(reg_tree_nj, e_tree_nj)
+      ric_tree_upgma  <- c(ric_tree_upgma, r_tree_upgma)
+      div_tree_upgma  <- c(div_tree_upgma, d_tree_upgma) 
+      reg_tree_upgma  <- c(reg_tree_upgma, e_tree_upgma) 
+      ric_hv          <- c(ric_hv, r_hv)
+      div_hv          <- c(div_hv, d_hv)
+      reg_hv          <- c(reg_hv, e_hv)
+      
+    } else { 
+      
+      n_trait         <- rep(ncol(traits_j),10)
+      n_species       <- seq(from = 10, to = 100, by = 10)
+      simulation      <- rep(j, nrow(comm))
+      ric_tree_nj     <- r_tree_nj 
+      div_tree_nj     <- d_tree_nj 
+      reg_tree_nj     <- e_tree_nj 
+      ric_tree_upgma  <- r_tree_upgma
+      div_tree_upgma  <- d_tree_upgma 
+      reg_tree_upgma  <- e_tree_upgma 
+      ric_hv          <- r_hv
+      div_hv          <- d_hv
+      reg_hv          <- e_hv
+      
+    }
+  }
+  
+  if(i > 1) {
+    results <- rbind(results, data.frame(
+      process = rep("OU", length(simulation)),
+      n_trait,
+      n_species,
+      simulation,
+      ric_tree_nj,
+      div_tree_nj,
+      reg_tree_nj,
+      ric_tree_upgma,
+      div_tree_upgma, 
+      reg_tree_upgma,  
+      ric_hv,   
+      div_hv,  
+      reg_hv))
+  } else {
+    
+    results <- data.frame(process = rep("OU", length(simulation)),
+                          n_trait,
+                          n_species,
+                          simulation,
+                          ric_tree_nj,
+                          div_tree_nj,
+                          reg_tree_nj,
+                          ric_tree_upgma,
+                          div_tree_upgma, 
+                          reg_tree_upgma,  
+                          ric_hv,   
+                          div_hv,  
+                          reg_hv)
+  }
+}
+
+## Save
+saveRDS(results, file = "results_OU.rds")
+
+## ------------
+## Checking results
+## ------------
+
+## Loading R packages for data analysis
+
+library("dplyr")
+library("tidyverse")
+#library("ggplot2")
+library("GGally")
+library("gridExtra")
+library("cowplot")
+
+
+# Brownian motion ---------------------------------------------------------
+
+## Checking correlation among Richness, Divergence and Regularity in nj-trees
+
+results_BM <- readRDS(file = "results_BM.rds")
+
+results_BM <- results_BM %>% mutate_at(vars(n_trait), as.factor)
+levels(results_BM$n_trait) <- c("1 Trait", "2 Traits", "4 Traits", "8 Traits")
+
+colors_manual = RColorBrewer::brewer.pal(6, "Blues")[3:6] 
+
+# To enhance visualization...
+results_BM$ric_hv <- log(results_BM$ric_hv+1)
+results_BM$reg_hv <- sqrt(asin(results_BM$reg_hv))
+
+# Check correlations (as scatterplots), variable distribution, and print correlation coefficient
+(plot1 <- results_BM %>% 
+    select(n_trait, n_species, ric_tree_nj, div_tree_nj, reg_tree_nj) %>% 
+    GGally::ggpairs(aes(colour = n_trait, fill = n_trait, alpha = 0.6),
+                    columns = 2:5,
+                    upper = list(continuous = GGally::wrap(ggally_cor, stars = F)),
+                    title = "Neighbour-joining tree [Simulation with Brownian motion]",
+                    columnLabels = c("N° species",
+                                     "Richness",
+                                     "Divergence",
+                                     "Regularity")) + 
+    scale_color_manual(values = rev(colors_manual))+
+    scale_fill_manual(values = rev(colors_manual))+
+    theme_bw() +
+    theme(
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      panel.grid.major.y = element_blank(),
+      plot.margin = unit(c(1, 1, 1, 1), units = "cm"),
+      strip.text=element_text(color = "grey10", face = "bold", size = 10),
+      strip.background = element_rect(colour=NA, fill="white")))
+
+# Is there cor with upgma trees and hypervolumes?
+strip_label_custom <- c("nj tree", "upgma tree", "hypervolume")
+
+(plot2 <- results_BM %>% 
+    select(n_trait, ric_tree_nj, ric_tree_upgma, ric_hv) %>% 
+    GGally::ggpairs(aes(colour = n_trait, fill = n_trait, alpha = 0.6),
+                    columns = 2:4,
+                    upper = list(continuous = GGally::wrap(ggally_cor, stars = F)),
+                    title = "Richness [Simulation with Brownian motion]",
+                    columnLabels = strip_label_custom) + 
+    scale_color_manual(values = rev(colors_manual))+
+    scale_fill_manual(values = rev(colors_manual))+
+    theme_bw() +
+    theme(
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      panel.grid.major.y = element_blank(),
+      plot.margin = unit(c(1, 1, 1, 1), units = "cm"),
+      strip.text=element_text(color = "grey10", face = "bold", size = 10),
+      strip.background = element_rect(colour=NA, fill="white")))
+
+(plot3 <- results_BM %>% 
+    select(n_trait, div_tree_nj, div_tree_upgma, div_hv) %>% 
+    GGally::ggpairs(aes(colour = n_trait, fill = n_trait, alpha = 0.6),
+                    columns = 2:4,
+                    upper = list(continuous = GGally::wrap(ggally_cor, stars = F)),
+                    title = "Divergence [Simulation with Brownian motion]",
+                    columnLabels = strip_label_custom) + 
+    scale_color_manual(values = rev(colors_manual))+
+    scale_fill_manual(values = rev(colors_manual))+
+    theme_bw() +
+    theme(
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      panel.grid.major.y = element_blank(),
+      plot.margin = unit(c(1, 1, 1, 1), units = "cm"),
+      strip.text=element_text(color = "grey10", face = "bold", size = 10),
+      strip.background = element_rect(colour=NA, fill="white")))
+
+(plot4 <- results_BM %>% 
+    select(n_trait, reg_tree_nj, reg_tree_upgma, reg_hv) %>% 
+    GGally::ggpairs(aes(colour = n_trait, fill = n_trait, alpha = 0.6),
+                    columns = 2:4,
+                    upper = list(continuous = GGally::wrap(ggally_cor, stars = F)),
+                    title = "Regularity [Simulation with Brownian motion]",
+                    columnLabels = strip_label_custom) + 
+    scale_color_manual(values = rev(colors_manual))+
+    scale_fill_manual(values = rev(colors_manual))+
+    theme_bw() +
+    theme(
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      panel.grid.major.y = element_blank(),
+      plot.margin = unit(c(1, 1, 1, 1), units = "cm"),
+      strip.text=element_text(color = "grey10", face = "bold", size = 10),
+      strip.background = element_rect(colour=NA, fill="white")))
+
+# OU  ---------------------------------------------------------
+
+## Checking correlation among Richness, Divergence and Regularity in nj-trees
+
+results_OU <- readRDS(file = "results_OU.rds")
+
+results_OU <- results_OU %>% mutate_at(vars(n_trait), as.factor)
+levels(results_OU$n_trait) <- c("1 Trait", "2 Traits", "4 Traits", "8 Traits")
+
+colors_manual = RColorBrewer::brewer.pal(6, "Blues")[3:6] 
+
+# To enhance visualization...
+results_OU$ric_hv <- log(results_OU$ric_hv+1)
+
+# Check correlations (as scatterplots), variable distribution, and print correlation coefficient
+(plot1b <- results_OU %>% 
+    select(n_trait, n_species, ric_tree_nj, div_tree_nj, reg_tree_nj) %>% 
+    GGally::ggpairs(aes(colour = n_trait, fill = n_trait, alpha = 0.6),
+                    columns = 2:5,
+                    upper = list(continuous = GGally::wrap(ggally_cor, stars = F)),
+                    title = "Neighbour-joining tree [Simulation with Ornstein-Uhlenbeck]",
+                    columnLabels = c("N° species",
+                                     "Richness",
+                                     "Divergence",
+                                     "Regularity")) + 
+    scale_color_manual(values = rev(colors_manual))+
+    scale_fill_manual(values = rev(colors_manual))+
+    theme_bw() +
+    theme(
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      panel.grid.major.y = element_blank(),
+      plot.margin = unit(c(1, 1, 1, 1), units = "cm"),
+      strip.text=element_text(color = "grey10", face = "bold", size = 10),
+      strip.background = element_rect(colour=NA, fill="white")))
+
+# Is there cor with upgma trees and hypervolumes?
+strip_label_custom <- c("nj tree", "upgma tree", "hypervolume")
+
+(plot2b <- results_OU %>% 
+    select(n_trait, ric_tree_nj, ric_tree_upgma, ric_hv) %>% 
+    GGally::ggpairs(aes(colour = n_trait, fill = n_trait, alpha = 0.6),
+                    columns = 2:4,
+                    upper = list(continuous = GGally::wrap(ggally_cor, stars = F)),
+                    title = "Richness [Simulation with Ornstein-Uhlenbeck]",
+                    columnLabels = strip_label_custom) + 
+    scale_color_manual(values = rev(colors_manual))+
+    scale_fill_manual(values = rev(colors_manual))+
+    theme_bw() +
+    theme(
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      panel.grid.major.y = element_blank(),
+      plot.margin = unit(c(1, 1, 1, 1), units = "cm"),
+      strip.text=element_text(color = "grey10", face = "bold", size = 10),
+      strip.background = element_rect(colour=NA, fill="white")))
+
+(plot3b <- results_BM %>% 
+    select(n_trait, div_tree_nj, div_tree_upgma, div_hv) %>% 
+    GGally::ggpairs(aes(colour = n_trait, fill = n_trait, alpha = 0.6),
+                    columns = 2:4,
+                    upper = list(continuous = GGally::wrap(ggally_cor, stars = F)),
+                    title = "Divergence [Simulation with Ornstein-Uhlenbeck]",
+                    columnLabels = strip_label_custom) + 
+    scale_color_manual(values = rev(colors_manual))+
+    scale_fill_manual(values = rev(colors_manual))+
+    theme_bw() +
+    theme(
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      panel.grid.major.y = element_blank(),
+      plot.margin = unit(c(1, 1, 1, 1), units = "cm"),
+      strip.text=element_text(color = "grey10", face = "bold", size = 10),
+      strip.background = element_rect(colour=NA, fill="white")))
+
+(plot4b <- results_OU %>% 
+    select(n_trait, reg_tree_nj, reg_tree_upgma, reg_hv) %>% 
+    GGally::ggpairs(aes(colour = n_trait, fill = n_trait, alpha = 0.6),
+                    columns = 2:4,
+                    upper = list(continuous = GGally::wrap(ggally_cor, stars = F)),
+                    title = "Regularity [Simulation with Ornstein-Uhlenbeck]",
+                    columnLabels = strip_label_custom) + 
+    scale_color_manual(values = rev(colors_manual))+
+    scale_fill_manual(values = rev(colors_manual))+
+    theme_bw() +
+    theme(
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      panel.grid.major.y = element_blank(),
+      plot.margin = unit(c(1, 1, 1, 1), units = "cm"),
+      strip.text=element_text(color = "grey10", face = "bold", size = 10),
+      strip.background = element_rect(colour=NA, fill="white")))
+
+# Saving plots
+ggsave(plot = cowplot::plot_grid(
+  ggmatrix_gtable(plot1),
+  ggmatrix_gtable(plot1b),
+  nrow = 1, ncol = 2, labels = c("A", "B")), filename = "Figure_NJ.pdf",width = 38, height = 18, units = "cm")
+
+ggsave(plot = cowplot::plot_grid(
+  ggmatrix_gtable(plot2),
+  ggmatrix_gtable(plot2b),
+  ggmatrix_gtable(plot3),
+  ggmatrix_gtable(plot3b),
+  ggmatrix_gtable(plot4),
+  ggmatrix_gtable(plot4b),
+  nrow = 3, ncol = 2, labels = c("A", "B", "C", "D", "E", "F")), 
+  filename = "Figure_Rich_Div_Reg.pdf",width = 38, height = 32, units = "cm")

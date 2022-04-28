@@ -109,3 +109,9 @@ logisticline_max <- function(z,model) {
 
 # Standard error
 std <- function(x) sd(x, na.rm = TRUE)/sqrt(length(x))
+
+# Mode
+getmode <- function(v) {
+  uniqv <- unique(v)
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}

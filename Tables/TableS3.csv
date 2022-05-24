@@ -1,0 +1,10 @@
+"","Variable","Estimate","SE","t","Pr(>|t|)"
+"1","Mention of location in title [no]",1.019,1.678,0.607,0.544
+"2","Mention of taxon/a in title [no]",1.203,1.668,0.721,0.471
+"3","Mention of habitat in title [no]",2.864,1.671,1.714,0.087
+"4","Number of coauthors' countries",4.892,1.592,3.073,0.002
+"5","Impact factor",10.046,1.033,9.725,0
+"6","Sampled biodiversity : No descriptors",4.092,2.446,1.673,0.095
+"7","Sampled biodiversity : 1 descriptor",2.786,1.385,2.012,0.045
+"8","Sampled biodiversity : 2 descriptors",0.472,1.56,0.302,0.763
+"9","Sampled biodiversity : 3 descriptors",-1.08,2.431,-0.444,0.657

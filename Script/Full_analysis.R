@@ -268,7 +268,6 @@ db2 <- within(db2, Method    <- relevel(Method,    ref = "Multiple"))
 #clean
 rm(method_split, method, geography, geography_split, domain, domain_split, i)
 
-
 ####################
 # Summary stats #2 #
 ####################
@@ -290,12 +289,14 @@ getmode(db2$Biodiversity_prop)*100 #mode
 
 Percentile <- ifelse(db2$Biodiversity_prop > quantile(db2$Biodiversity_prop, c(.75)),"75–100 percentile","0–75 percentile")
 
+model_0 <- glm(Biodiversity_prop ~ Publication_year, data = db2, family = quasibinomial(link = "logit"))
 model_1 <- glm(Biodiversity_prop ~ Publication_year, data = db2[Percentile == "0–75 percentile", ], family = quasibinomial(link = "logit"))
 model_2 <- glm(Biodiversity_prop ~ Publication_year, data = db2[Percentile == "75–100 percentile", ], family = quasibinomial(link = "logit"))
 
 lablel_custom = c(expression(paste("0-75"^{"th"})),
                   expression(paste("75-100"^{"th"})))
 
+summary(model_0)
 summary(model_1)
 summary(model_2)
 
@@ -305,8 +306,8 @@ Col_custom <- c(rev(RColorBrewer::brewer.pal(5, "Blues"))[1], "orange")
     geom_point(aes(fill = Percentile, col = Percentile), size = 3, shape = 21, alpha = 0.25) +
     geom_smooth(aes(col = Percentile, fill = Percentile), method = "glm", formula = y ~ x, 
                 method.args = list(family = quasibinomial(link = "logit"))) +
-    scale_color_manual(labels = lablel_custom, values = Col_lines)+
-    scale_fill_manual(labels = lablel_custom, values = Col_lines)+
+    scale_color_manual(labels = lablel_custom, values = Col_custom)+
+    scale_fill_manual(labels = lablel_custom, values = Col_custom)+
     labs(x = NULL, y = Y.label)+
     theme_custom()+ theme(legend.position = c(0.25, 0.85),
                           legend.text.align = 0,
@@ -356,7 +357,6 @@ ggpubr::ggarrange(plot1a, plot1b, plot1c, plot1d,
                   ncol = 2, nrow = 2) #warnings() are due to NA removal
 
 dev.off()
-
 
 #clean
 rm(plot1a, plot1b, plot1c, plot1d)
@@ -501,14 +501,14 @@ performance::check_overdispersion(m1) #overdispersed
 #Refit with quasibinomial due to overdispersion 
 m1b  <- MASS::glm.nb(model_1, data = db_glm)
 
-parameters::parameters(m1b, df_method="wald")
+parameters::parameters(m1b, df_method = "wald")
 performance::check_collinearity(m1b)
 performance::r2(m1b)
 
 # PostHoc
-pairs(emmeans::emmeans(m1b, ~ Domain), simple=c("Domain"))
-pairs(emmeans::emmeans(m1b, ~ Geography), simple="Geography")
-pairs(emmeans::emmeans(m1b, ~ Method), simple="Method")
+pairs(emmeans::emmeans(m1b, ~ Domain), simple = c("Domain"))
+pairs(emmeans::emmeans(m1b, ~ Geography), simple = "Geography")
+pairs(emmeans::emmeans(m1b, ~ Method), simple = "Method")
 
 # Estract estimates
 Estimates_m1 <- 
@@ -567,6 +567,9 @@ plot_model1 <- ggplot2::ggplot(data = Estimates_m1) +
     theme_custom() + theme(axis.text.y  = element_text(colour = rev(col_p))) + coord_flip()+
   annotate(geom = 'text', x = 2, y = -0.9, size =5,
            label = paste0("R^2 ==",round(as.numeric(performance::r2(m1b)[1]),2)), parse = TRUE)
+
+# Save the table
+write.csv(Estimates_m1,"Tables/TableS1.csv")
 
 # Clean
 rm(m1, m1b, sign, order_var1, model_1, col_p)
@@ -707,6 +710,8 @@ plot_model2 <- ggplot2::ggplot(data = Estimates_m2) +
   annotate(geom = 'text', x = 1.2, y = -0.7, size =5,
            label = paste0("R^2 ==",round(as.numeric(performance::r2(m2)[1]),2)), parse = TRUE)
 
+# Save the table
+write.csv(Estimates_m2,"Tables/TableS2.csv")
 
 rm(m2, sign, order_var2, model_2, col_p)
 
@@ -725,17 +730,17 @@ bar1 <- bar1[ 1 : (nrow(bar1)-Taxa_to_rename), ]
 
 bar1 <- rbind(bar1, data.frame(Phyla = paste0("Others (n = ",Taxa_to_rename,")"), N = N_to_rename))
 
-bar1 <- cbind(bar1, Type = c(rep("Animal",2),
-                           "Plant",
-                           rep("Animal",2),
-                           "Plant",
-                           "Microorganism",
-                           "Plant",
-                           rep("Animal",3),
-                           rep("Plant",2),
-                           "Animal",
+bar1 <- cbind(bar1, Type = c(rep("Animals",2),
+                           "Plants",
+                           rep("Animals",2),
+                           "Plants",
+                           "Microorganisms",
+                           "Plants",
+                           rep("Animals",3),
+                           rep("Plants",2),
+                           "Animals",
                            "Fungi", #ascoo
-                           rep("Animal",2),
+                           rep("Animals",2),
                            "Multiple",
                            "Fungi",
                            "Multiple"))
@@ -776,12 +781,12 @@ bar2 <- bar2[ 1 : (nrow(bar2)-Taxa_to_rename), ]
 
 bar2 <- rbind(bar2, data.frame(Phyla = paste0("Others (n = ",Taxa_to_rename,")"), N = N_to_rename))
 
-bar2 <- cbind(bar2, Type = c(rep("Animal",2),
-                             rep("Plant",2),
-                             "Microorganism",
-                             rep("Animal",3),
-                             rep("Plant",2),
-                             rep("Animal",2),
+bar2 <- cbind(bar2, Type = c(rep("Animals",2),
+                             rep("Plants",2),
+                             "Microorganisms",
+                             rep("Animals",3),
+                             rep("Plants",2),
+                             rep("Animals",2),
                              "Multiple"))
 
 bar2$Phyla <- factor(bar2$Phyla, levels = bar2$Phyla)
@@ -975,6 +980,9 @@ col_p <- ifelse(par > 0.05, "grey5", Col_custom[1])
          y = "Citations [residuals]",
          title = "Interaction sampled biodiversity * N° of descriptors")+ theme_custom())
 
+# Save the table
+write.csv(Estimates_m3,"Tables/TableS3.csv")
+
 # Testing altmetric -------------------------------------------------------
 
 db_alt <- db_impact %>% select(Altmetrics_residuals,
@@ -1086,6 +1094,10 @@ col_p <- ifelse(par > 0.05, "grey5", Col_custom[1])
     labs(x = "Sampled biodiversity [log-transformed]", 
          y = "Altmetric score [residuals]",
          title = NULL)+ theme_custom())
+
+# Save the table
+Estimates_m4[,-1] <- round(Estimates_m4[,-1],3)
+write.csv(Estimates_m4,"Tables/TableS4.csv")
 
 # Store the final figure
 pdf(file = "Figure/Figure_4.pdf", width = 16, height = 14)

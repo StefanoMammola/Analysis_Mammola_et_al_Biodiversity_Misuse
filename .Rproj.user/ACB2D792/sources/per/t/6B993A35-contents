@@ -986,7 +986,7 @@ col_p <- ifelse(par > 0.05, "grey5", Col_custom[1])
 Estimates_m3[,-1] <- round(Estimates_m3[,-1],3)
 write.csv(Estimates_m3,"Tables/TableS3.csv")
 
-# Testing altmetric -------------------------------------------------------
+# Testing Altmetric -------------------------------------------------------
 
 db_alt <- db_impact %>% select(Altmetrics_residuals,
                             Biodiversity,

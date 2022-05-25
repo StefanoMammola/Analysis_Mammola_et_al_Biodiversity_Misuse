@@ -569,6 +569,7 @@ plot_model1 <- ggplot2::ggplot(data = Estimates_m1) +
            label = paste0("R^2 ==",round(as.numeric(performance::r2(m1b)[1]),2)), parse = TRUE)
 
 # Save the table
+Estimates_m1[,-1] <- round(Estimates_m1[,-1],3)
 write.csv(Estimates_m1,"Tables/TableS1.csv")
 
 # Clean
@@ -711,6 +712,7 @@ plot_model2 <- ggplot2::ggplot(data = Estimates_m2) +
            label = paste0("R^2 ==",round(as.numeric(performance::r2(m2)[1]),2)), parse = TRUE)
 
 # Save the table
+Estimates_m2[,-1] <- round(Estimates_m2[,-1],3)
 write.csv(Estimates_m2,"Tables/TableS2.csv")
 
 rm(m2, sign, order_var2, model_2, col_p)
@@ -981,9 +983,10 @@ col_p <- ifelse(par > 0.05, "grey5", Col_custom[1])
          title = "Interaction sampled biodiversity * N° of descriptors")+ theme_custom())
 
 # Save the table
+Estimates_m3[,-1] <- round(Estimates_m3[,-1],3)
 write.csv(Estimates_m3,"Tables/TableS3.csv")
 
-# Testing altmetric -------------------------------------------------------
+# Testing Altmetric -------------------------------------------------------
 
 db_alt <- db_impact %>% select(Altmetrics_residuals,
                             Biodiversity,

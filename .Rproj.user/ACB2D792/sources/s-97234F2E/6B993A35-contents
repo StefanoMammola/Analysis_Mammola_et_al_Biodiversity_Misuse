@@ -77,6 +77,13 @@ table(db$Title_adjecties)
 db$Facets_biodiversity <- as.factor(rowSums(db[,31:34]))
 table(db$Facets_biodiversity)
 
+# Facets
+
+table(db$Taxonomic_div)
+table(db$Phylogenetic_div)
+table(db$Functional_div)
+table(db$Other_div)
+
 # Missing data 
 Amelia::missmap(db)
 

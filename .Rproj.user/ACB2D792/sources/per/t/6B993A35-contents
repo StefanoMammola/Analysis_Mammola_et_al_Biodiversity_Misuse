@@ -75,14 +75,14 @@ table(db$Title_adjecties)
 
 # Number of biodiversity facets
 db$Facets_biodiversity <- as.factor(rowSums(db[,31:34]))
-table(db$Facets_biodiversity)
+
 
 # Facets
-
-table(db$Taxonomic_div)
-table(db$Phylogenetic_div)
-table(db$Functional_div)
-table(db$Other_div)
+table(db[db$Facets_biodiversity != 0,]$Facets_biodiversity)/nrow(db[db$Facets_biodiversity != 0,])
+table(db[db$Facets_biodiversity != 0,]$Taxonomic_div)/nrow(db[db$Facets_biodiversity != 0,])
+table(db[db$Facets_biodiversity != 0,]$Phylogenetic_div)/nrow(db[db$Facets_biodiversity != 0,])
+table(db[db$Facets_biodiversity != 0,]$Functional_div)/nrow(db[db$Facets_biodiversity != 0,])
+table(db[db$Facets_biodiversity != 0,]$Other_div)/nrow(db[db$Facets_biodiversity != 0,])
 
 # Missing data 
 Amelia::missmap(db)

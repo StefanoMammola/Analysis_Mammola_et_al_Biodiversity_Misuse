@@ -76,7 +76,6 @@ table(db$Title_adjecties)
 # Number of biodiversity facets
 db$Facets_biodiversity <- as.factor(rowSums(db[,31:34]))
 
-
 # Facets
 table(db[db$Facets_biodiversity != 0,]$Facets_biodiversity)/nrow(db[db$Facets_biodiversity != 0,])
 table(db[db$Facets_biodiversity != 0,]$Taxonomic_div)/nrow(db[db$Facets_biodiversity != 0,])
@@ -287,9 +286,9 @@ table(db2$Taxonomic_div)
 table(db2$Other_div)
 
 #What proportion of biodiversity across studies?
-mean(db2$Biodiversity_prop, na.rm = TRUE)*100 #mean 
+mean(db2$Biodiversity_prop, na.rm = TRUE) * 100 #mean 
 std(db2$Biodiversity_prop)*100 #sW 
-range(db2$Biodiversity_prop, na.rm = TRUE)*100 #range
+range(db2$Biodiversity_prop, na.rm = TRUE) * 100 #range
 getmode(db2$Biodiversity_prop)*100 #mode
 
 # Checking temporal distribution
@@ -297,24 +296,31 @@ getmode(db2$Biodiversity_prop)*100 #mode
 Percentile <- ifelse(db2$Biodiversity_prop > quantile(db2$Biodiversity_prop, c(.75)),"75–100 percentile","0–75 percentile")
 
 model_0 <- glm(Biodiversity_prop ~ Publication_year, data = db2, family = quasibinomial(link = "logit"))
-model_1 <- glm(Biodiversity_prop ~ Publication_year, data = db2[Percentile == "0–75 percentile", ], family = quasibinomial(link = "logit"))
-model_2 <- glm(Biodiversity_prop ~ Publication_year, data = db2[Percentile == "75–100 percentile", ], family = quasibinomial(link = "logit"))
+#model_1 <- glm(Biodiversity_prop ~ Publication_year, data = db2[Percentile == "0–75 percentile", ], family = quasibinomial(link = "logit"))
+model_1 <- glm(Biodiversity_prop ~ Publication_year, data = db2[Percentile == "75–100 percentile", ], family = quasibinomial(link = "logit"))
 
-lablel_custom = c(expression(paste("0-75"^{"th"})),
-                  expression(paste("75-100"^{"th"})))
+# lablel_custom = c(expression("Full data"),
+#                   expression(paste("Percentile: 75-100"^{"th"})))
 
 summary(model_0)
 summary(model_1)
-summary(model_2)
 
 Col_custom <- c(rev(RColorBrewer::brewer.pal(5, "Blues"))[1], "orange")
 
 (plot1a <- ggplot(data = db2, aes(x = Publication_year, y = Biodiversity_prop)) + 
-    geom_point(aes(fill = Percentile, col = Percentile), size = 3, shape = 21, alpha = 0.25) +
-    geom_smooth(aes(col = Percentile, fill = Percentile), method = "glm", formula = y ~ x, 
+    geom_point(size = 3, shape = 21, alpha = 0.25,
+               col = rev(RColorBrewer::brewer.pal(5, "Blues"))[1],
+               fill = rev(RColorBrewer::brewer.pal(5, "Blues"))[1]) +
+    
+    
+    geom_smooth(method = "glm", formula = y ~ x, col = rev(RColorBrewer::brewer.pal(5, "Blues"))[1],
+                fill = rev(RColorBrewer::brewer.pal(5, "Blues"))[1], alpha = 0.5,
                 method.args = list(family = quasibinomial(link = "logit"))) +
-    scale_color_manual(labels = lablel_custom, values = Col_custom)+
-    scale_fill_manual(labels = lablel_custom, values = Col_custom)+
+    
+    geom_smooth(data = db2[Percentile == "75–100 percentile", ], aes(x = Publication_year, y = Biodiversity_prop),
+                method = "glm", formula = y ~ x, col = "orange",
+                fill = "orange", alpha = 0.25,
+                method.args = list(family = quasibinomial(link = "logit"))) +
     labs(x = NULL, y = Y.label)+
     theme_custom()+ theme(legend.position = c(0.25, 0.85),
                           legend.text.align = 0,

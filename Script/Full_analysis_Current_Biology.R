@@ -26,7 +26,6 @@ library("ggplot2")
 library("MuMIn")
 library("parameters")
 library("performance")
-library("sjPlot")
 library("psych")
 library("PupillometryR")
 library("tidyr")
@@ -642,18 +641,10 @@ db_alt$Descriptors <- droplevels(db_alt$Descriptors)
 model_4 <- as.formula("Altmetrics_residuals ~ Title_geo + 
                                               Title_taxon + 
                                               Title_hab + 
-                                            country_diversity +
-                                            IFlog +
-                                            Biodiversity : Descriptors ")
+                                              country_diversity +
+                                              IFlog +
+                                              Biodiversity : Descriptors ")
 
-
-# model_4 <- as.formula("Altmetrics_residuals ~ 
-#                                               country_diversity +
-#                                               IF +
-#                                               Biodiversity : Title_geo +
-#                                               Biodiversity : Title_hab +
-#                                               Biodiversity : Title_taxon +
-#                                               (1|journal)")
 
 # Initial model
 m4 <- lm(model_4, data = db_alt)
@@ -878,3 +869,4 @@ ggpubr::ggarrange(plotS1a, plotS1b, plotS1c, barS1,
                   ncol = 2, nrow = 2) #warnings() are due to NA removal
 
 dev.off()
+#end

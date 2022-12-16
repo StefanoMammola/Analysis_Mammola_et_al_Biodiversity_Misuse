@@ -2,7 +2,7 @@
 
 Data (tab delimited .csv and .xlsx formats) and code associated with the study:
 
-Mammola S. et al. How much biodiversity is concealed in the word “biodiversity”? Current Biology, in press.
+Mammola S. et al. How much biodiversity is concealed in the word “biodiversity”? Current Biology, in press. https: //doi.org/10.1016/j.cub.2022.12.003
 
 - Script "Data extraction.r" has been used to extract the full set of data from the Web of Science and randomly sample the publication to be analysed.
 
